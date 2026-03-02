@@ -7,10 +7,7 @@ It queries multiple public providers in parallel, returns the first successful a
 ## What Is a CEP?
 `CEP` means `Codigo de Enderecamento Postal` in Brazil.
 It is the Brazilian postal code, similar to a ZIP code in the US.
-
-For non-English readers:
-- `CEP` = postal code in Brazil.
-- Usually written as `00000-000` (for example `01001-000`) or as 8 digits (`01001000`). This API accepts both formats.
+This API accepts both formats: `00000-000` (for example `01001-000`) and `00000000` (for example `01001000`).
 
 ## Why This Project
 - Concurrent lookup across multiple providers
