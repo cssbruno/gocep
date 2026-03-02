@@ -4,23 +4,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffotoni/gocep/config"
-	"github.com/jeffotoni/gocep/models"
-	"github.com/jeffotoni/gocep/service/gocache"
+	"github.com/cssbruno/gocep/config"
+	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/service/gocache"
 )
 
 // go test -run ^TestSearch$ -v
 func TestSearch(t *testing.T) {
-	oldCacheEnable := config.CACHE_ENABLE
-	config.CACHE_ENABLE = true
+	oldCacheEnable := config.CacheEnabled
+	config.CacheEnabled = true
 	t.Cleanup(func() {
-		config.CACHE_ENABLE = oldCacheEnable
+		config.CacheEnabled = oldCacheEnable
 	})
 
 	gocache.SetTTL("08226024",
 		`{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
-		time.Duration(config.TTlCache)*time.Second)
-	gocache.SetTTL("01001000", `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`, time.Duration(config.TTlCache)*time.Second)
+		time.Duration(config.TTLCache)*time.Second)
+	gocache.SetTTL("01001000", `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`, time.Duration(config.TTLCache)*time.Second)
 
 	type args struct {
 		cep string
@@ -65,15 +65,15 @@ func TestSearch(t *testing.T) {
 				t.Errorf("Search() = %v, want %v", got, tt.want)
 			}
 
-			if ValidCep(wecep) != tt.wantCep {
-				t.Errorf("ValidCep() = %v, want %v", ValidCep(wecep), tt.wantCep)
+			if ValidCEP(wecep) != tt.wantCep {
+				t.Errorf("ValidCEP() = %v, want %v", ValidCEP(wecep), tt.wantCep)
 			}
 		})
 	}
 }
 
-// go test -run ^TestValidCep$ -v
-func TestValidCep(t *testing.T) {
+// go test -run ^TestValidCEP$ -v
+func TestValidCEP(t *testing.T) {
 	type args struct {
 		wecep models.WeCep
 	}
@@ -84,7 +84,7 @@ func TestValidCep(t *testing.T) {
 	}{
 		{
 			name: "test_valid_cep_",
-			args: args{models.WeCep{Cidade: "São Paulo", Uf: "SP", Logradouro: "Rua Esperança", Bairro: "Cidade Antônio Estevão de Carvalho"}},
+			args: args{models.WeCep{City: "São Paulo", StateCode: "SP", Street: "Rua Esperança", Neighborhood: "Cidade Antônio Estevão de Carvalho"}},
 			want: true,
 		},
 		{
@@ -95,10 +95,37 @@ func TestValidCep(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ValidCep(tt.args.wecep)
+			got := ValidCEP(tt.args.wecep)
 			if got != tt.want {
-				t.Errorf("ValidCep() = %v, want %v", got, tt.want)
+				t.Errorf("ValidCEP() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func BenchmarkSearchCacheHit(b *testing.B) {
+	oldCacheEnable := config.CacheEnabled
+	config.CacheEnabled = true
+	defer func() {
+		config.CacheEnabled = oldCacheEnable
+	}()
+
+	cep := "08226024"
+	payload := `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`
+	wecep := models.WeCep{
+		City:         "São Paulo",
+		StateCode:    "SP",
+		Street:       "Rua Esperança",
+		Neighborhood: "Cidade Antônio Estevão de Carvalho",
+	}
+	gocache.SetAnyTTL(cep, cachedResult{JSON: payload, WeCep: wecep}, time.Duration(config.TTLCache)*time.Second)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, err := Search(cep)
+		if err != nil {
+			b.Fatalf("Search() error = %v", err)
+		}
 	}
 }

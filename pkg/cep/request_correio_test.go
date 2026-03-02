@@ -17,8 +17,8 @@ const correioPayloadTemplate = `<x:Envelope xmlns:x="http://schemas.xmlsoap.org/
 	</x:Body>
 </x:Envelope>`
 
-// go test -run ^TestNewRequestWithContextCorreio$ -v
-func TestNewRequestWithContextCorreio(t *testing.T) {
+// go test -run ^TestRequestCorreio$ -v
+func TestRequestCorreio(t *testing.T) {
 	tests := []struct {
 		name         string
 		endpoint     string
@@ -75,21 +75,21 @@ func TestNewRequestWithContextCorreio(t *testing.T) {
 			defer cancel()
 
 			chResult := make(chan Result, 1)
-			go NewRequestWithContextCorreio(ctx, cancel, "01001000", "correio", http.MethodPost, endpoint, correioPayloadTemplate, chResult)
+			go requestCorreio(ctx, cancel, "01001000", http.MethodPost, endpoint, correioPayloadTemplate, chResult)
 
 			if tt.wantResult {
 				select {
 				case got := <-chResult:
 					if string(got.Body) != tt.want {
-						t.Errorf("NewRequestWithContextCorreio() = %v, want %v", string(got.Body), tt.want)
+						t.Errorf("requestCorreio() = %v, want %v", string(got.Body), tt.want)
 					}
 				case <-time.After(time.Second):
-					t.Fatalf("NewRequestWithContextCorreio() timeout waiting for result")
+					t.Fatalf("requestCorreio() timeout waiting for result")
 				}
 			} else {
 				select {
 				case got := <-chResult:
-					t.Fatalf("NewRequestWithContextCorreio() unexpected result: %s", string(got.Body))
+					t.Fatalf("requestCorreio() unexpected result: %s", string(got.Body))
 				case <-time.After(200 * time.Millisecond):
 				}
 			}

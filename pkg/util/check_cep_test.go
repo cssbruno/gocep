@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-// Esse exemplo passa um cep inválido para função CheckCep
-func ExampleCheckCep() {
-	err := CheckCep("não é um cep")
+// ExampleCheckCEP validates an invalid CEP input.
+func ExampleCheckCEP() {
+	err := CheckCEP("not-a-cep")
 	fmt.Println(err)
-	// Output: {"msg":"error cep tem que ser valido"}
+	// Output: invalid cep
 }
 
-// go test -run ^TestCheckCep'$ -v
-func TestCheckCep(t *testing.T) {
+// go test -run ^TestCheckCEP'$ -v
+func TestCheckCEP(t *testing.T) {
 	type args struct {
 		cep string
 	}
@@ -35,9 +35,18 @@ func TestCheckCep(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CheckCep(tt.args.cep); (err != nil) != tt.wantErr {
-				t.Errorf("CheckCep() error = %v, wantErr %v", err, tt.wantErr)
+			if err := CheckCEP(tt.args.cep); (err != nil) != tt.wantErr {
+				t.Errorf("CheckCEP() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func BenchmarkCheckCEPValid(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := CheckCEP("08226021"); err != nil {
+			b.Fatalf("CheckCEP() error = %v", err)
+		}
 	}
 }

@@ -7,57 +7,68 @@ import (
 )
 
 func GetInt(name string, defaultValue int) int {
-	e := os.Getenv(name)
-	if len(e) > 0 {
-		if val, ok := strconv.Atoi(e); ok == nil {
-			return val
-		}
-		// println("Error Parse value [", e, "]")
+	raw, found := os.LookupEnv(name)
+	if !found || raw == "" {
+		return defaultValue
 	}
-	return defaultValue
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultValue
+	}
+
+	return value
 }
 
 func GetInt64(name string, defaultValue int64) int64 {
-	e := os.Getenv(name)
-	if len(e) > 0 {
-		if val, ok := strconv.Atoi(e); ok == nil {
-			return int64(val)
-		}
-		// println("Error Parse value [", e, "]")
+	raw, found := os.LookupEnv(name)
+	if !found || raw == "" {
+		return defaultValue
 	}
-	return defaultValue
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultValue
+	}
+
+	return int64(value)
 }
 
 // 1000000000 = 1s
 // 1000000 = 1ms
-// Default em Millesecond
+// Default unit is millisecond.
 func GetDuration(name string, defaultValue time.Duration) time.Duration {
-	e := os.Getenv(name)
-	if len(e) > 0 {
-		if val, ok := strconv.Atoi(e); ok == nil {
-			return time.Duration(int64(val)) * time.Millisecond
-		}
-		// println("Error Parse value [", e, "]")
+	raw, found := os.LookupEnv(name)
+	if !found || raw == "" {
+		return defaultValue
 	}
-	return defaultValue
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultValue
+	}
+
+	return time.Duration(value) * time.Millisecond
 }
 
-func GetString(name string, defaultValue string) (e string) {
-	e = os.Getenv(name)
-	if len(e) > 0 {
-		return
+func GetString(name string, defaultValue string) string {
+	value, found := os.LookupEnv(name)
+	if !found || value == "" {
+		return defaultValue
 	}
-	e = defaultValue
-	return
+	return value
 }
 
 func GetBool(name string, defaultValue bool) bool {
-	e := os.Getenv(name)
-	if len(e) > 0 {
-		if val, ok := strconv.ParseBool(e); ok == nil {
-			return val
-		}
-		// println("found value ", e, " but could not parse to boolean")
+	raw, found := os.LookupEnv(name)
+	if !found || raw == "" {
+		return defaultValue
 	}
-	return defaultValue
+
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return defaultValue
+	}
+
+	return value
 }

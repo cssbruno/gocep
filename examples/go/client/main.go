@@ -23,6 +23,10 @@ func main() {
 		log.Println("client.Do:", err)
 		return
 	}
+	if resp == nil {
+		log.Println("client.Do: nil response")
+		return
+	}
 
 	defer resp.Body.Close()
 	var code int = resp.StatusCode

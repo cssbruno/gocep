@@ -7,10 +7,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/cssbruno/gocep/models"
 )
 
-// go test -run ^TestNewRequestWithContext$ -v
-func TestNewRequestWithContext(t *testing.T) {
+// go test -run ^TestRequestProvider$ -v
+func TestRequestProvider(t *testing.T) {
 	tests := []struct {
 		name         string
 		cep          string
@@ -24,7 +26,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "cdnapicep_success",
 			cep:          "01001000",
-			source:       "cdnapicep",
+			source:       models.SourceCdnApiCep,
 			statusCode:   http.StatusOK,
 			responseBody: `{"status":200,"code":"01001-000","state":"SP","city":"São Paulo","district":"Sé","address":"Praça da Sé - lado ímpar"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé - lado ímpar","bairro":"Sé"}`,
@@ -34,7 +36,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "githubjeffotoni_success",
 			cep:          "01001000",
-			source:       "githubjeffotoni",
+			source:       models.SourceGitHubJeffotoni,
 			statusCode:   http.StatusOK,
 			responseBody: `{"cep":"01001-000","logradouro":"da Sé","bairro":"Sé","uf":"SP","cidade":"São Paulo"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
@@ -44,7 +46,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "viacep_success",
 			cep:          "01001000",
-			source:       "viacep",
+			source:       models.SourceViaCep,
 			statusCode:   http.StatusOK,
 			responseBody: `{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
@@ -54,7 +56,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "postmon_success",
 			cep:          "01001000",
-			source:       "postmon",
+			source:       models.SourcePostmon,
 			statusCode:   http.StatusOK,
 			responseBody: `{"bairro":"Sé","cidade":"São Paulo","logradouro":"Praça da Sé","estado":"SP"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
@@ -64,7 +66,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "republicavirtual_success",
 			cep:          "01001000",
-			source:       "republicavirtual",
+			source:       models.SourceRepublicaVirtual,
 			statusCode:   http.StatusOK,
 			responseBody: `{"uf":"SP","cidade":"São Paulo","bairro":"Sé","logradouro":"da Sé"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
@@ -74,7 +76,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "brasilapi_success",
 			cep:          "01001000",
-			source:       "brasilapi",
+			source:       models.SourceBrasilAPI,
 			statusCode:   http.StatusOK,
 			responseBody: `{"cep":"01001-000","state":"SP","city":"São Paulo","neighborhood":"Sé","street":"Praça da Sé"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
@@ -84,7 +86,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "invalid_json_no_result",
 			cep:          "01001000",
-			source:       "viacep",
+			source:       models.SourceViaCep,
 			statusCode:   http.StatusOK,
 			responseBody: `invalid-json`,
 			wantPath:     "/01001000",
@@ -93,7 +95,7 @@ func TestNewRequestWithContext(t *testing.T) {
 		{
 			name:         "non_200_no_result",
 			cep:          "01001000",
-			source:       "viacep",
+			source:       models.SourceViaCep,
 			statusCode:   http.StatusBadGateway,
 			responseBody: `{"error":"upstream"}`,
 			wantPath:     "/01001000",
@@ -121,21 +123,21 @@ func TestNewRequestWithContext(t *testing.T) {
 			defer cancel()
 
 			chResult := make(chan Result, 1)
-			go NewRequestWithContext(ctx, cancel, tt.cep, tt.source, http.MethodGet, server.URL+"/%s", chResult)
+			go requestProvider(ctx, cancel, tt.cep, tt.source, http.MethodGet, server.URL+"/%s", chResult)
 
 			if tt.wantResult {
 				select {
 				case got := <-chResult:
 					if string(got.Body) != tt.want {
-						t.Errorf("NewRequestWithContext() = %v, want %v", string(got.Body), tt.want)
+						t.Errorf("requestProvider() = %v, want %v", string(got.Body), tt.want)
 					}
 				case <-time.After(time.Second):
-					t.Fatalf("NewRequestWithContext() timeout waiting for result")
+					t.Fatalf("requestProvider() timeout waiting for result")
 				}
 			} else {
 				select {
 				case got := <-chResult:
-					t.Fatalf("NewRequestWithContext() unexpected result: %s", string(got.Body))
+					t.Fatalf("requestProvider() unexpected result: %s", string(got.Body))
 				case <-time.After(200 * time.Millisecond):
 				}
 			}

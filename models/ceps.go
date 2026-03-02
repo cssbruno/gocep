@@ -4,12 +4,12 @@ import (
 	"encoding/xml"
 )
 
-// Default
+// WeCep is the normalized response used by this project.
 type WeCep struct {
-	Cidade     string `json:"cidade"`
-	Uf         string `json:"uf"`
-	Logradouro string `json:"logradouro"`
-	Bairro     string `json:"bairro"`
+	City         string `json:"cidade"`
+	StateCode    string `json:"uf"`
+	Street       string `json:"logradouro"`
+	Neighborhood string `json:"bairro"`
 }
 
 type CdnApiCep struct {
@@ -22,55 +22,55 @@ type CdnApiCep struct {
 }
 
 type GithubJeffotoni struct {
-	Cep        string `json:"cep"`
-	Logradouro string `json:"logradouro"`
-	Bairro     string `json:"bairro"`
-	Uf         string `json:"uf"`
-	Estado     string `json:"estado"`
-	Cidade     string `json:"cidade"`
-	Ibge       int    `json:"ibge"`
+	PostalCode   string `json:"cep"`
+	Street       string `json:"logradouro"`
+	Neighborhood string `json:"bairro"`
+	StateCode    string `json:"uf"`
+	State        string `json:"estado"`
+	City         string `json:"cidade"`
+	IBGE         int    `json:"ibge"`
 }
 
-// viacep
+// ViaCep provider response.
 type ViaCep struct {
-	Cep         string `json:"cep"`
-	Logradouro  string `json:"logradouro"`
-	Complemento string `json:"complemento"`
-	Bairro      string `json:"bairro"`
-	Localidade  string `json:"localidade"`
-	Uf          string `json:"uf"`
-	Unidade     string `json:"unidade"`
-	Ibge        string `json:"ibge"`
-	Gia         string `json:"gia"`
+	PostalCode   string `json:"cep"`
+	Street       string `json:"logradouro"`
+	Complement   string `json:"complemento"`
+	Neighborhood string `json:"bairro"`
+	City         string `json:"localidade"`
+	StateCode    string `json:"uf"`
+	Unit         string `json:"unidade"`
+	IBGE         string `json:"ibge"`
+	GIA          string `json:"gia"`
 }
 
-// postmon
+// Postmon provider response.
 type PostMon struct {
-	Bairro     string `json:"bairro"`
-	Cidade     string `json:"cidade"`
-	Logradouro string `json:"logradouro"`
-	EstadoInfo struct {
-		AreaKm2    string `json:"area_km2"`
-		CodigoIbge string `json:"codigo_ibge"`
-		Nome       string `json:"nome"`
+	Neighborhood string `json:"bairro"`
+	City         string `json:"cidade"`
+	Street       string `json:"logradouro"`
+	StateInfo    struct {
+		AreaKM2  string `json:"area_km2"`
+		IBGECode string `json:"codigo_ibge"`
+		Name     string `json:"nome"`
 	} `json:"estado_info"`
-	Cep        string `json:"cep"`
-	CidadeInfo struct {
-		AreaKm2    string `json:"area_km2"`
-		CodigoIbge string `json:"codigo_ibge"`
+	PostalCode string `json:"cep"`
+	CityInfo   struct {
+		AreaKM2  string `json:"area_km2"`
+		IBGECode string `json:"codigo_ibge"`
 	} `json:"cidade_info"`
-	Estado string `json:"estado"`
+	State string `json:"estado"`
 }
 
-// republicavirtual
+// RepublicaVirtual provider response.
 type RepublicaVirtual struct {
-	Resultado      string `json:"resultado"`
-	ResultadoTxt   string `json:"resultado_txt"`
-	Uf             string `json:"uf"`
-	Cidade         string `json:"cidade"`
-	Bairro         string `json:"bairro"`
-	TipoLogradouro string `json:"tipo_logradouro"`
-	Logradouro     string `json:"logradouro"`
+	Result       string `json:"resultado"`
+	ResultText   string `json:"resultado_txt"`
+	StateCode    string `json:"uf"`
+	City         string `json:"cidade"`
+	Neighborhood string `json:"bairro"`
+	StreetType   string `json:"tipo_logradouro"`
+	Street       string `json:"logradouro"`
 }
 
 type Correio struct {
@@ -78,27 +78,27 @@ type Correio struct {
 	Text    string   `xml:",chardata"`
 	Soap    string   `xml:"soap,attr"`
 	Body    struct {
-		Text                string `xml:",chardata"`
-		ConsultaCEPResponse struct {
+		Text              string `xml:",chardata"`
+		LookupCEPResponse struct {
 			Text   string `xml:",chardata"`
 			Ns2    string `xml:"ns2,attr"`
 			Return struct {
 				Text         string `xml:",chardata"`
-				Bairro       string `xml:"bairro"`
-				Cep          string `xml:"cep"`
-				Cidade       string `xml:"cidade"`
-				Complemento2 string `xml:"complemento2"`
-				End          string `xml:"end"`
-				Uf           string `xml:"uf"`
+				Neighborhood string `xml:"bairro"`
+				PostalCode   string `xml:"cep"`
+				City         string `xml:"cidade"`
+				Complement2  string `xml:"complemento2"`
+				Address      string `xml:"end"`
+				StateCode    string `xml:"uf"`
 			} `xml:"return"`
 		} `xml:"consultaCEPResponse"`
 	} `xml:"Body"`
 }
 
 type BrasilAPI struct {
-	Cep	string `json:"cep"`
-	State string `json:"state"`
-	City string `json:"city"`
+	PostalCode   string `json:"cep"`
+	State        string `json:"state"`
+	City         string `json:"city"`
 	Neighborhood string `json:"neighborhood"`
-	Street	string `json:"street"`
+	Street       string `json:"street"`
 }

@@ -1,4 +1,4 @@
-module github.com/jeffotoni/gocep
+module github.com/cssbruno/gocep
 
 go 1.23
 

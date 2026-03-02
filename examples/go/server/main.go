@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
-	"strings"
 
-	"github.com/jeffotoni/gocep/pkg/cep"
+	"github.com/cssbruno/gocep/pkg/cep"
+	"github.com/cssbruno/gocep/pkg/util"
 
 	"github.com/rs/cors"
 )
@@ -17,7 +17,7 @@ var (
 func main() {
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/cep/", HandlerCep)
+	mux.HandleFunc("/cep/{cep...}", HandlerCEP)
 	mux.HandleFunc("/cep", NotFound)
 	mux.HandleFunc("/", NotFound)
 	muxcors := cors.Default().Handler(mux)
@@ -30,10 +30,10 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func HandlerCep(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-	cepstr := strings.Split(r.URL.Path[1:], "/")[1]
-	if len(cepstr) != 8 {
+func HandlerCEP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	cepstr := r.PathValue("cep")
+	if err := util.CheckCEP(cepstr); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -45,17 +45,17 @@ func HandlerCep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !cep.ValidCep(wecep) {
+	if !cep.ValidCEP(wecep) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	var b []byte
 	if len(result) > 0 {
-		b = []byte(string(result))
+		b = []byte(result)
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write(b)
+	_, _ = w.Write(b)
 }
 
 func NotFound(w http.ResponseWriter, r *http.Request) {

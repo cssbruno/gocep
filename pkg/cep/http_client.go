@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 
-	"github.com/jeffotoni/gocep/config"
+	"github.com/cssbruno/gocep/config"
 )
 
 var httpClient = &http.Client{

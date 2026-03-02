@@ -3,90 +3,97 @@ package cep
 import (
 	"context"
 	"encoding/json"
-	"runtime"
 	"time"
 
-	"github.com/jeffotoni/gocep/config"
-	"github.com/jeffotoni/gocep/models"
-	"github.com/jeffotoni/gocep/service/gocache"
+	"github.com/cssbruno/gocep/config"
+	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/service/gocache"
 )
 
-// Result representa a resposta da requisição em uma das APIs
+// Result represents one provider response payload.
 type Result struct {
-	Body []byte
-	//WeCep *models.WeCep
+	Body  []byte
+	WeCep models.WeCep
 }
 
-// Search busca o cep informado de forma concorrente nas APIs definidas em [pkg/models/endpoints.go],
-// retornando a primeira resposta(string em formato JSON) e um erro.
+type cachedResult struct {
+	JSON  string
+	WeCep models.WeCep
+}
+
+// Search concurrently looks up a CEP using providers declared in [models/endpoints.go].
+// It returns the first JSON response and the normalized WeCep payload.
 func Search(cep string) (jsonCep string, wecep models.WeCep, err error) {
 	if len(cep) == 0 {
 		jsonCep = config.JsonDefault
-		err = json.Unmarshal([]byte(jsonCep), &wecep)
 		return
 	}
 
-	if config.CACHE_ENABLE {
-		jsonCep = gocache.Get(cep)
-		if len(jsonCep) > 0 {
-			if err = json.Unmarshal([]byte(jsonCep), &wecep); err == nil {
-				return
+	if config.CacheEnabled {
+		if value, found := gocache.GetAny(cep); found {
+			switch v := value.(type) {
+			case cachedResult:
+				return v.JSON, v.WeCep, nil
+			case string:
+				jsonCep = v
+				if err = json.Unmarshal([]byte(jsonCep), &wecep); err == nil {
+					_ = gocache.SetAnyTTL(cep, cachedResult{
+						JSON:  jsonCep,
+						WeCep: wecep,
+					}, time.Duration(config.TTLCache)*time.Second)
+					return
+				}
 			}
 		}
 	}
 
-	var chResult = make(chan Result, len(models.Endpoints))
-	runtime.GOMAXPROCS(config.NumCPU)
+	results := make(chan Result, len(models.Endpoints))
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(config.TimeoutSearchCEP)*time.Second)
+	defer cancel()
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(),
-		time.Duration(config.TimeOutSearchCep)*time.Second)
-	defer timeoutCancel()
-
-	ctx, cancelRequests := context.WithCancel(timeoutCtx)
-	defer cancelRequests()
-
-	for _, e := range models.Endpoints {
-		endpoint := e.Url
-		source := e.Source
-		method := e.Method
-		payload := e.Body
-		go func(cancel context.CancelFunc, cep, method, source, endpoint, payload string, chResult chan<- Result) {
-			if source == "correio" {
-				NewRequestWithContextCorreio(ctx, cancel, cep, source, method, endpoint, payload, chResult)
-			} else {
-				NewRequestWithContext(ctx, cancel, cep, source, method, endpoint, chResult)
+	for _, endpoint := range models.Endpoints {
+		endpoint := endpoint
+		go func() {
+			if endpoint.Source == models.SourceCorreio {
+				requestCorreio(ctx, cancel, cep, endpoint.Method, endpoint.URL, endpoint.Body, results)
+				return
 			}
-		}(cancelRequests, cep, method, source, endpoint, payload, chResult)
+			requestProvider(ctx, cancel, cep, endpoint.Source, endpoint.Method, endpoint.URL, results)
+		}()
 	}
 
 	select {
-	case result := <-chResult:
+	case result := <-results:
 		jsonCep = string(result.Body)
-		if err = json.Unmarshal([]byte(jsonCep), &wecep); err != nil {
-			jsonCep = config.JsonDefault
-			err = json.Unmarshal([]byte(jsonCep), &wecep)
-			return
-		}
-		if wecep.Cidade != "" && wecep.Logradouro != "" && wecep.Uf != "" && wecep.Bairro != "" {
-			if config.CACHE_ENABLE {
-				gocache.SetTTL(cep, string(result.Body), time.Duration(config.TTlCache)*time.Second)
+		wecep = result.WeCep
+		if wecep.City != "" && wecep.Street != "" && wecep.StateCode != "" && wecep.Neighborhood != "" {
+			if config.CacheEnabled {
+				gocache.SetAnyTTL(cep, cachedResult{
+					JSON:  jsonCep,
+					WeCep: wecep,
+				}, time.Duration(config.TTLCache)*time.Second)
 			}
 		}
 		return
 
-	case <-timeoutCtx.Done():
+	case <-ctx.Done():
 	}
 	jsonCep = config.JsonDefault
-	err = json.Unmarshal([]byte(jsonCep), &wecep)
 	return
 }
 
-func ValidCep(wecep models.WeCep) bool {
-	if len(wecep.Cidade) == 0 &&
-		len(wecep.Uf) == 0 &&
-		len(wecep.Logradouro) == 0 &&
-		len(wecep.Bairro) == 0 {
+func ValidCEP(wecep models.WeCep) bool {
+	if len(wecep.City) == 0 &&
+		len(wecep.StateCode) == 0 &&
+		len(wecep.Street) == 0 &&
+		len(wecep.Neighborhood) == 0 {
 		return false
 	}
 	return true
+}
+
+// Deprecated: use ValidCEP.
+func ValidCep(wecep models.WeCep) bool {
+	return ValidCEP(wecep)
 }

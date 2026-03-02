@@ -1,9 +1,9 @@
-package handler
+package handlers
 
 import (
 	"net/http"
 )
 
 func NotFound(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotFound)
+	writeAPIError(w, http.StatusNotFound, "not_found", "resource not found")
 }

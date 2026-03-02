@@ -129,3 +129,29 @@ func TestGet(t *testing.T) {
 		})
 	}
 }
+
+func TestSetAnyTTLAndGetAny(t *testing.T) {
+	TestRun(t)
+
+	type cacheValue struct {
+		Name string
+	}
+
+	value := cacheValue{Name: "gocep"}
+	if ok := SetAnyTTL("typed", value, time.Second); !ok {
+		t.Fatalf("SetAnyTTL() = false, want true")
+	}
+
+	got, found := GetAny("typed")
+	if !found {
+		t.Fatalf("GetAny() found = false, want true")
+	}
+
+	cast, ok := got.(cacheValue)
+	if !ok {
+		t.Fatalf("GetAny() type assertion failed: %T", got)
+	}
+	if cast != value {
+		t.Fatalf("GetAny() = %+v, want %+v", cast, value)
+	}
+}

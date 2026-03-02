@@ -7,22 +7,16 @@ import (
 	gcache "github.com/patrickmn/go-cache"
 )
 
-type Gocache struct {
-	Once       sync.Once
-	GcacheOnce *gcache.Cache
-	Err        error
-}
-
-var gcs = new(Gocache)
+var (
+	cacheOnce sync.Once
+	cacheInst *gcache.Cache
+)
 
 func Run() *gcache.Cache {
-	gcs.Once.Do(func() {
-		if gcs.GcacheOnce != nil {
-			return
-		}
-		gcs.GcacheOnce = gcache.New(24*time.Hour, 24*time.Hour)
+	cacheOnce.Do(func() {
+		cacheInst = gcache.New(24*time.Hour, 24*time.Hour)
 	})
-	return gcs.GcacheOnce
+	return cacheInst
 }
 
 func SetTTL(key, value string, ttl time.Duration) bool {
@@ -34,14 +28,31 @@ func SetTTL(key, value string, ttl time.Duration) bool {
 	return true
 }
 
-func Get(key string) string {
-	if len(key) <= 0 {
-		return ""
+func SetAnyTTL(key string, value any, ttl time.Duration) bool {
+	if len(key) == 0 || value == nil {
+		return false
 	}
 	g := Run()
-	value, found := g.Get(key)
+	g.Set(key, value, ttl)
+	return true
+}
+
+func GetAny(key string) (any, bool) {
+	if len(key) == 0 {
+		return nil, false
+	}
+	g := Run()
+	return g.Get(key)
+}
+
+func Get(key string) string {
+	value, found := GetAny(key)
 	if !found {
 		return ""
 	}
-	return value.(string)
+	strValue, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strValue
 }

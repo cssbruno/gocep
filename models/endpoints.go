@@ -1,25 +1,46 @@
 package models
 
-type end struct {
+type Endpoint struct {
 	Method string
 	Source string
-	Url    string
+	URL    string
 	Body   string
 }
 
-var Endpoints = []end{
-	{"GET", "cdnapicep", "https://cdn.apicep.com/file/apicep/%s.json", ""},
-	{"GET", "githubjeffotoni", "https://raw.githubusercontent.com/jeffotoni/api.cep/master/v1/cep/%s", ""},
-	{"GET", "viacep", "https://viacep.com.br/ws/%s/json/", ""},
-	{"GET", "postmon", "https://api.postmon.com.br/v1/cep/%s", ""},
-	{"GET", "republicavirtual", "https://republicavirtual.com.br/web_cep.php?cep=%s&formato=json", ""},
-	{"POST", "correio", "https://apps.correios.com.br/SigepMasterJPA/AtendeClienteService/AtendeCliente",
-		`<x:Envelope xmlns:x="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cli="http://cliente.bean.master.sigep.bsb.correios.com.br/">
-	    <x:Body>
-	        <cli:consultaCEP>
-	            <cep>%s</cep>
-	        </cli:consultaCEP>
-	    </x:Body>
-	</x:Envelope>`},
-	{"GET", "brasilapi", "https://brasilapi.com.br/api/cep/v1/%s", ""},
+const (
+	MethodGet  = "GET"
+	MethodPost = "POST"
+
+	SourceCdnApiCep        = "cdnapicep"
+	SourceGitHubJeffotoni  = "githubjeffotoni"
+	SourceViaCep           = "viacep"
+	SourcePostmon          = "postmon"
+	SourceRepublicaVirtual = "republicavirtual"
+	SourceCorreio          = "correio"
+	SourceBrasilAPI        = "brasilapi"
+
+	URLCdnApiCep        = "https://cdn.apicep.com/file/apicep/%s.json"
+	URLGitHubJeffotoni  = "https://raw.githubusercontent.com/jeffotoni/api.cep/master/v1/cep/%s"
+	URLViaCep           = "https://viacep.com.br/ws/%s/json/"
+	URLPostmon          = "https://api.postmon.com.br/v1/cep/%s"
+	URLRepublicaVirtual = "https://republicavirtual.com.br/web_cep.php?cep=%s&formato=json"
+	URLCorreiosService  = "https://apps.correios.com.br/SigepMasterJPA/AtendeClienteService/AtendeCliente"
+	URLBrasilAPI        = "https://brasilapi.com.br/api/cep/v1/%s"
+	PayloadCorreio      = `<x:Envelope xmlns:x="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cli="http://cliente.bean.master.sigep.bsb.correios.com.br/">
+    <x:Body>
+        <cli:consultaCEP>
+            <cep>%s</cep>
+        </cli:consultaCEP>
+    </x:Body>
+</x:Envelope>`
+)
+
+var Endpoints = []Endpoint{
+	{Method: MethodGet, Source: SourceCdnApiCep, URL: URLCdnApiCep},
+	{Method: MethodGet, Source: SourceGitHubJeffotoni, URL: URLGitHubJeffotoni},
+	{Method: MethodGet, Source: SourceViaCep, URL: URLViaCep},
+	{Method: MethodGet, Source: SourcePostmon, URL: URLPostmon},
+	{Method: MethodGet, Source: SourceRepublicaVirtual, URL: URLRepublicaVirtual},
+	{Method: MethodPost, Source: SourceCorreio, URL: URLCorreiosService, Body: PayloadCorreio},
+	{Method: MethodGet, Source: SourceBrasilAPI, URL: URLBrasilAPI},
 }
