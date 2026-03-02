@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/cssbruno/gocep/pkg/cep"
 	"github.com/cssbruno/gocep/pkg/util"
@@ -22,8 +23,13 @@ func main() {
 	mux.HandleFunc("/", NotFound)
 	muxcors := cors.Default().Handler(mux)
 	server := &http.Server{
-		Addr:    Port,
-		Handler: muxcors,
+		Addr:              Port,
+		Handler:           muxcors,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	log.Println("Run My Server ", Port)

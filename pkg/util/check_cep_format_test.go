@@ -56,3 +56,23 @@ func TestFormatCEP(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkNormalizeCEPAlreadyNormalized(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		got, err := NormalizeCEP("01001000")
+		if err != nil || got != "01001000" {
+			b.Fatalf("NormalizeCEP() = %q, err=%v", got, err)
+		}
+	}
+}
+
+func BenchmarkNormalizeCEPWithHyphen(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		got, err := NormalizeCEP("01001-000")
+		if err != nil || got != "01001000" {
+			b.Fatalf("NormalizeCEP() = %q, err=%v", got, err)
+		}
+	}
+}

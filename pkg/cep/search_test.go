@@ -103,6 +103,11 @@ func TestValidCEP(t *testing.T) {
 			args: args{models.CEPAddress{}},
 			want: false,
 		},
+		{
+			name: "test_partial_cep_is_invalid",
+			args: args{models.CEPAddress{City: "São Paulo"}},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

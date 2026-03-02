@@ -1,33 +1,24 @@
 package gocache
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/cssbruno/gocep/config"
-	gcache "github.com/patrickmn/go-cache"
 )
 
 // go test -run ^TestRun'$ -v
 func TestRun(t *testing.T) {
 	resetCacheForTests()
 
-	tests := []struct {
-		name    string
-		want    *gcache.Cache
-		wantErr bool
-	}{
-		{name: "test_run_", want: Run(), wantErr: false},
-		{name: "test_run_", want: gcache.New(24*time.Hour, 24*time.Hour), wantErr: true},
-		{name: "test_run_", want: new(gcache.Cache), wantErr: true},
+	got := Run()
+	if got == nil {
+		t.Fatalf("Run() = nil, want non-nil")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Run(); !reflect.DeepEqual(got, tt.want) && !tt.wantErr {
-				t.Errorf("Run() = %v, want %v", got, tt.want)
-			}
-		})
+
+	got2 := Run()
+	if got != got2 {
+		t.Fatalf("Run() should be idempotent and return same cache instance")
 	}
 }
 
@@ -231,5 +222,8 @@ func TestRun_RedisFallbackStillProvidesMemoryCache(t *testing.T) {
 
 	if got := Run(); got == nil {
 		t.Fatalf("Run() = nil, want non-nil memory cache fallback")
+	}
+	if IsRedisBackend() {
+		t.Fatalf("IsRedisBackend() = true, want false when redis init fails")
 	}
 }

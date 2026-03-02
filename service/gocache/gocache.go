@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/cssbruno/gocep/config"
+	"github.com/dgraph-io/ristretto/v2"
 	redis "github.com/redis/go-redis/v9"
-
-	gcache "github.com/patrickmn/go-cache"
 )
 
 var (
 	cacheOnce sync.Once
-	cacheInst *gcache.Cache
+	cacheInst *ristretto.Cache[string, any]
 	redisInst *redis.Client
 	backend   string
 )
@@ -26,7 +25,7 @@ const (
 	backendRedis  = "redis"
 )
 
-func Run() *gcache.Cache {
+func Run() *ristretto.Cache[string, any] {
 	ensureBackend()
 	return cacheInst
 }
@@ -41,7 +40,8 @@ func SetTTL(key, value string, ttl time.Duration) bool {
 		return redisSet(key, value, ttl)
 	}
 
-	cacheInst.Set(key, value, ttl)
+	cacheInst.SetWithTTL(key, value, 1, ttl)
+	cacheInst.Wait()
 	return true
 }
 
@@ -59,7 +59,8 @@ func SetAnyTTL(key string, value any, ttl time.Duration) bool {
 		return redisSet(key, serialized, ttl)
 	}
 
-	cacheInst.Set(key, value, ttl)
+	cacheInst.SetWithTTL(key, value, 1, ttl)
+	cacheInst.Wait()
 	return true
 }
 
@@ -78,7 +79,12 @@ func GetAny(key string) (any, bool) {
 		return value, true
 	}
 
-	return cacheInst.Get(key)
+	value, found := cacheInst.Get(key)
+	if !found {
+		return nil, false
+	}
+
+	return value, true
 }
 
 func Get(key string) string {
@@ -95,9 +101,38 @@ func Get(key string) string {
 	return ""
 }
 
+func IsRedisBackend() bool {
+	ensureBackend()
+	return backend == backendRedis
+}
+
 func ensureBackend() {
 	cacheOnce.Do(func() {
-		cacheInst = gcache.New(24*time.Hour, 24*time.Hour)
+		ristrettoConfig := &ristretto.Config[string, any]{
+			NumCounters: config.NumCounters,
+			MaxCost:     config.MaxCost,
+			BufferItems: config.BufferItems,
+		}
+		if ristrettoConfig.NumCounters <= 0 {
+			ristrettoConfig.NumCounters = 1e7
+		}
+		if ristrettoConfig.MaxCost <= 0 {
+			ristrettoConfig.MaxCost = 1 << 30
+		}
+		if ristrettoConfig.BufferItems <= 0 {
+			ristrettoConfig.BufferItems = 64
+		}
+
+		cache, err := ristretto.NewCache(ristrettoConfig)
+		if err != nil {
+			// Fall back to known-safe defaults if env values are invalid.
+			cache, _ = ristretto.NewCache(&ristretto.Config[string, any]{
+				NumCounters: 1e7,
+				MaxCost:     1 << 30,
+				BufferItems: 64,
+			})
+		}
+		cacheInst = cache
 
 		configured := strings.ToLower(strings.TrimSpace(config.CacheBackend))
 		if configured == backendRedis && initRedisBackend() {
@@ -196,6 +231,9 @@ func serializeForRedis(value any) (string, bool) {
 }
 
 func resetCacheForTests() {
+	if cacheInst != nil {
+		cacheInst.Close()
+	}
 	if redisInst != nil {
 		_ = redisInst.Close()
 	}

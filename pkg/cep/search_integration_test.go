@@ -3,6 +3,7 @@ package cep
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -167,5 +168,112 @@ func TestSearchIntegrationFallbackFromCorreioToViaCEP(t *testing.T) {
 	}
 	if correioCalls.Load() > 1 {
 		t.Fatalf("correio provider calls = %d, want <= 1", correioCalls.Load())
+	}
+}
+
+func TestSearchIgnoresIncompleteStringCacheAndUsesProviderResult(t *testing.T) {
+	const cepCode = "66666666"
+	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Completa","bairro":"Centro"}`
+
+	var calls atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"cep":"66666-666","logradouro":"Rua Completa","bairro":"Centro","localidade":"São Paulo","uf":"SP"}`))
+	}))
+	defer provider.Close()
+
+	oldEndpoints := models.Endpoints
+	models.Endpoints = []models.Endpoint{
+		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/%s"},
+	}
+	t.Cleanup(func() {
+		models.Endpoints = oldEndpoints
+	})
+
+	oldCacheEnabled := config.CacheEnabled
+	config.CacheEnabled = true
+	t.Cleanup(func() {
+		config.CacheEnabled = oldCacheEnabled
+	})
+
+	// Incomplete payload must not be treated as a valid cache hit.
+	if ok := gocache.SetTTL(cepCode, `{"cidade":"São Paulo","uf":"","logradouro":"","bairro":""}`, time.Minute); !ok {
+		t.Fatalf("failed to seed incomplete cache")
+	}
+
+	gotBody, gotAddress, err := Search(cepCode)
+	if err != nil {
+		t.Fatalf("Search() error = %v, want nil", err)
+	}
+	if gotBody != expectedBody {
+		t.Fatalf("Search() body = %s, want %s", gotBody, expectedBody)
+	}
+	if !ValidCEP(gotAddress) {
+		t.Fatalf("Search() returned invalid normalized CEP: %+v", gotAddress)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls.Load())
+	}
+}
+
+func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
+	const cepCode = "02020020"
+	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Dedupe","bairro":"Centro"}`
+
+	var calls atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"cep":"02020-020","logradouro":"Rua Dedupe","bairro":"Centro","localidade":"São Paulo","uf":"SP"}`))
+	}))
+	defer provider.Close()
+
+	oldEndpoints := models.Endpoints
+	models.Endpoints = []models.Endpoint{
+		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/%s"},
+	}
+	t.Cleanup(func() {
+		models.Endpoints = oldEndpoints
+	})
+
+	oldCacheEnabled := config.CacheEnabled
+	config.CacheEnabled = false
+	t.Cleanup(func() {
+		config.CacheEnabled = oldCacheEnabled
+	})
+
+	const workers = 20
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	errs := make(chan string, workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			gotBody, gotAddress, err := Search(cepCode)
+			if err != nil {
+				errs <- err.Error()
+				return
+			}
+			if gotBody != expectedBody {
+				errs <- "unexpected body"
+				return
+			}
+			if !ValidCEP(gotAddress) {
+				errs <- "unexpected invalid address"
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Fatalf("concurrent Search() error: %s", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls.Load())
 	}
 }

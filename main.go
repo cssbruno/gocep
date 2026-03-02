@@ -8,7 +8,6 @@ import (
 	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/handlers"
 
-	"github.com/jeffotoni/gcolor"
 	"github.com/rs/cors"
 )
 
@@ -29,7 +28,7 @@ func main() {
 		IdleTimeout:       config.ServerIdleTO,
 		MaxHeaderBytes:    config.ServerMaxHeaderB,
 	}
-	log.Println(gcolor.YellowCor("Server Run Port"), config.Port)
-	log.Println(gcolor.YellowCor("/v1/cep/{cep}"))
+	log.Println("Server Run Port", config.Port)
+	log.Println("/v1/cep/{cep}")
 	log.Fatal(server.ListenAndServe())
 }

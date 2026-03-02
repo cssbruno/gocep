@@ -28,11 +28,22 @@ func NormalizeCEP(cep string) (string, error) {
 		return "", ErrInvalidCEP
 	}
 
-	digits := make([]byte, 0, 8)
+	// Fast path for already-normalized CEP.
+	if err := CheckCEP(cep); err == nil {
+		return cep, nil
+	}
+
+	var digits [8]byte
+	count := 0
 	for i := 0; i < len(cep); i++ {
 		switch c := cep[i]; {
 		case c >= '0' && c <= '9':
-			digits = append(digits, c)
+			if count < len(digits) {
+				digits[count] = c
+				count++
+				continue
+			}
+			return "", ErrInvalidCEP
 		case c == '-' || c == '.' || c == '/' || c == ' ' || c == '\t' || c == '\n' || c == '\r':
 			continue
 		default:
@@ -40,11 +51,11 @@ func NormalizeCEP(cep string) (string, error) {
 		}
 	}
 
-	normalized := string(digits)
-	if err := CheckCEP(normalized); err != nil {
-		return "", err
+	if count != len(digits) {
+		return "", ErrInvalidCEP
 	}
-	return normalized, nil
+
+	return string(digits[:]), nil
 }
 
 // FormatCEP returns a CEP in the standard "00000-000" format.

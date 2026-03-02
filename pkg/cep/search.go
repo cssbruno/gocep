@@ -10,6 +10,7 @@ import (
 	"github.com/cssbruno/gocep/models"
 	"github.com/cssbruno/gocep/pkg/util"
 	"github.com/cssbruno/gocep/service/gocache"
+	"golang.org/x/sync/singleflight"
 )
 
 // Result represents one provider response payload.
@@ -22,6 +23,8 @@ type cachedResult struct {
 	JSON    string
 	Address models.CEPAddress
 }
+
+var searchSingleflight singleflight.Group
 
 // Search concurrently looks up a CEP using providers declared in [models/endpoints.go].
 // It returns the first JSON response and the normalized CEP address payload.
@@ -39,8 +42,7 @@ func Search(cep string) (jsonCep string, address models.CEPAddress, err error) {
 		return config.JsonDefault, models.CEPAddress{}, nil
 	}
 
-	jsonCep, address = searchProviders(normalizedCEP)
-	return jsonCep, address, nil
+	return searchProvidersSingleflight(normalizedCEP)
 }
 
 func normalizeSearchInput(cep string) (string, bool) {
@@ -68,20 +70,45 @@ func readCachedResult(cep string) (jsonCep string, address models.CEPAddress, fo
 
 	switch cached := value.(type) {
 	case cachedResult:
+		if cached.JSON == "" || !isCompleteAddress(cached.Address) {
+			return "", models.CEPAddress{}, false
+		}
 		return cached.JSON, cached.Address, true
 	case string:
 		var parsedAddress models.CEPAddress
 		if err := json.Unmarshal([]byte(cached), &parsedAddress); err != nil {
 			return "", models.CEPAddress{}, false
 		}
-		_ = gocache.SetAnyTTL(cep, cachedResult{
-			JSON:    cached,
-			Address: parsedAddress,
-		}, time.Duration(config.TTLCache)*time.Second)
+		if !isCompleteAddress(parsedAddress) {
+			return "", models.CEPAddress{}, false
+		}
+		if !gocache.IsRedisBackend() {
+			_ = gocache.SetAnyTTL(cep, cachedResult{
+				JSON:    cached,
+				Address: parsedAddress,
+			}, time.Duration(config.TTLCache)*time.Second)
+		}
 		return cached, parsedAddress, true
 	default:
 		return "", models.CEPAddress{}, false
 	}
+}
+
+func searchProvidersSingleflight(cep string) (string, models.CEPAddress, error) {
+	value, _, _ := searchSingleflight.Do(cep, func() (any, error) {
+		jsonCep, address := searchProviders(cep)
+		return cachedResult{
+			JSON:    jsonCep,
+			Address: address,
+		}, nil
+	})
+
+	result, ok := value.(cachedResult)
+	if !ok {
+		return config.JsonDefault, models.CEPAddress{}, nil
+	}
+
+	return result.JSON, result.Address, nil
 }
 
 func searchProviders(cep string) (jsonCep string, address models.CEPAddress) {
@@ -141,13 +168,7 @@ func cacheSearchResult(cep, jsonCep string, address models.CEPAddress) {
 }
 
 func ValidCEP(address models.CEPAddress) bool {
-	if len(address.City) == 0 &&
-		len(address.StateCode) == 0 &&
-		len(address.Street) == 0 &&
-		len(address.Neighborhood) == 0 {
-		return false
-	}
-	return true
+	return isCompleteAddress(address)
 }
 
 // Deprecated: use ValidCEP.
