@@ -2,7 +2,7 @@ version: '3.5'
 
 services:
   gocep:
-    image: jeffotoni/gocep
+    image: cssbruno/gocep
     container_name: gocep
     hostname: gocep
     domainname: gocep.local.com

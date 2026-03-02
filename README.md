@@ -1,236 +1,139 @@
 # gocep
-[![GoDoc](https://godoc.org/gocep?status.svg)](https://godoc.org/gocep) ![Github Release](https://img.shields.io/github/v/release/jeffotoni/gocep?include_prereleases)[![CircleCI](https://dl.circleci.com/status-badge/img/gh/jeffotoni/gocep/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/jeffotoni/gocep/tree/master)[![Go Report](https://goreportcard.com/badge/gocep)](https://goreportcard.com/badge/gocep) [![License](https://img.shields.io/github/license/jeffotoni/gocep)](https://img.shields.io/github/license/jeffotoni/gocep) ![CircleCI](https://img.shields.io/circleci/build/github/jeffotoni/github.com/jeffotoni/gocep/master) ![Coveralls](https://img.shields.io/coverallsCoverage/github/jeffotoni/gocep)
-<!-- 
-[![Vulnerabilities](https://snyk.io/test/github/jeffotoni/github.com/jeffotoni/gocep/badge.svg)](https://snyk.io/test/github/jeffotoni/gocep) -->
+[![GoDoc](https://godoc.org/gocep?status.svg)](https://godoc.org/gocep) ![Github Release](https://img.shields.io/github/v/release/cssbruno/gocep?include_prereleases)[![CircleCI](https://dl.circleci.com/status-badge/img/gh/cssbruno/gocep/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/cssbruno/gocep/tree/master)[![Go Report](https://goreportcard.com/badge/gocep)](https://goreportcard.com/badge/gocep) [![License](https://img.shields.io/github/license/cssbruno/gocep)](https://img.shields.io/github/license/cssbruno/gocep) ![CircleCI](https://img.shields.io/circleci/build/github/cssbruno/github.com/cssbruno/gocep/master) ![Coveralls](https://img.shields.io/coverallsCoverage/github/cssbruno/gocep)
 
-Um simples pacote para buscar ceps em bases públicas na internet utilizando *concorrência*.
-Atualizamos para buscar não somente de bases públicas como também busca do correios que é chamadas SOAPs e busca também de uma base que encontra-se no [ceps github](https://raw.githubusercontent.com/jeffotoni/api.cep/master/v1/cep/) em raw.
+A fast CEP lookup service and library for Go.
+It queries multiple public providers concurrently, returns the first successful response, and caches results in memory.
 
-Você também pode extender e buscar sua própria base de Ceps se desejar consultar em sua própria base de dados.
+## Language Standardization
+This codebase was standardized to English so contributors from any country can read and maintain it more easily.
+English was chosen because it is the most common shared language across open-source tooling, docs, and teams.
 
-Está configurado para buscar em: 
- - viacep 
- - Postmon cep 
- - Republicavirtual 
- - Correio 
- - github Raw Cep
- - Cdn api cep
- - Brasil Api
+Note: some JSON/XML field names from external providers (and response compatibility fields) remain in Portuguese because they are protocol/data-contract values, not internal naming.
 
-Podendo implementar para ter uma saída ainda mais completa conforme sua necessidade, então fique a vontade em alterar conforme seu cenário.
+## Credits
+Original project and base implementation by **Jeffotoni**:
+- GitHub: https://github.com/jeffotoni
+- Repository: https://github.com/jeffotoni/gocep
 
-O server é extremamente rápido, e usa cache em memória ele está configurado para 2G de Ram, caso queira alterar está tudo bonitinho no /config.
+## Features
+- Concurrent CEP lookup across multiple providers
+- In-memory cache to reduce repeated upstream calls
+- REST endpoint: `GET /v1/cep/{cep}`
+- Library usage via `pkg/cep`
+- Deterministic JSON error format
 
-#### Fazendo chamadas do gocep em outras Langs
+## Current Providers
+Configured in [`models/endpoints.go`](models/endpoints.go):
+- CDN API CEP
+- GitHub raw CEP base
+- ViaCEP
+- Postmon
+- República Virtual
+- Correio (SOAP)
+- BrasilAPI
 
-Da uma conferida em alguns examplos aqui de como fazer chamadas do gocep em diversas linguagens:
- - nodejs
- - python
- - php
- - javascript
- - go lib
- - go server
- - go client
- - rust
- - C
- - C++
-
-[exemplos](https://github.com/jeffotoni/gocep/tree/master/examples)
-
-Você pode fazer seu próprio build usando Go, ou você poderá utilizar docker-compose. 
-O server irá funcionar na porta 8080, mas caso queira alterar basta ir na pasta /config.
-
-Para subir o serviço para seu Servidor ou sua máquina local basta compilar, e a porta 8080 será aberta para consumir o endpoint /v1/cep/{cep}
-
-Tudo muito legal não é ?? ❤️😍😍
-
-#### Install gocep
-
-Caso queira utilizar ele como serviço, basta baixa-lo ou usar o docker para utilizado.
-
-#### linux bash
+## Quick Start (Go)
 ```bash
-$ git clone https://gocep
-$ cd gocep
-$ CGO_ENABLED=0 go build -ldflags="-s -w" 
-$ ./gocep
-$ 2020/04/21 12:56:46 Port: 0.0.0.0:8080
-
+git clone https://github.com/cssbruno/gocep.git
+cd gocep
+go build -o gocep main.go
+./gocep
 ```
 
-#### docker e docker-compose
+Server default address:
+- `0.0.0.0:8080`
 
-Deixei um script para facilitar a criação de sua imagem, todos os arquivos estão na raiz, docker-compose.yaml, Dockerfile tudo que precisa para personalizar ainda mais se precisar.
-
+## Docker
 ```bash
-version: '3.5'
-
-services:
-  gocep:
-    image: jeffotoni/gocep
-    container_name: gocep
-    hostname: gocep
-    domainname: gocep.local.com
-    environment:
-      - "TZ=America/Sao_Paulo"
-      - "API_ENV=prod"
-    networks:
-        guulawork:
-           aliases:
-              - gocep.local.com
-    ports:
-      - 8080:8080
-    restart: always
-
-networks:
-  guulawork:
-      driver: bridge
-
+docker run --name gocep --rm -p 8080:8080 cssbruno/gocep:latest
 ```
 
-Ao rodar o script ele irá fazer pull da imagem que encontra-se no hub.docker.
+Or use:
 ```bash
-
-$ make compose
-
+make compose
 ```
 
-#### Listando service
+## API Usage
+### Request
 ```bash
-$ docker-compose ps
-Creating gocep ... done
-Name    Command   State           Ports         
-------------------------------------------------
-gocep   /gocep    Up      0.0.0.0:8080->8080/tcp
--e Generated Run docker-compose [ok] 
-
+curl -i -X GET http://localhost:8080/v1/cep/08226021
 ```
 
-#### Executando sua API
-```bash
-
-$ curl -i -XGET http://localhost:8080/v1/cep/08226021
-HTTP/1.1 200 OK
-Content-Type: application/json
-Date: Sun, 19 Feb 2023 13:15:03 GMT
-Content-Length: 112
-{
-	"cidade":"São Paulo",
-	"uf":"SP",
-	"logradouro":"18 de Abril",
-	"bairro":"Cidade Antônio Estevão de Carvalho"
-}
-
-```
-
-#### Docker
-
-Também poderá usar o Docker se desejar
-
-```bash
-$ docker run --name gocep --rm -p 8080:8080 jeffotoni/gocep:latest
-2023/02/19 17:12:03 Server Run Port 0.0.0.0:8080
-2023/02/19 17:12:03 /v1/cep/:cep
-
-$ curl -i -XGET http://localhost:8080/v1/cep/08226021
-HTTP/1.1 200 OK
-Content-Type: application/json
-Date: Sun, 19 Feb 2023 13:15:03 GMT
-Content-Length: 112
-{
-	"cidade":"São Paulo",
-	"uf":"SP",
-	"logradouro":"18 de Abril",
-	"bairro":"Cidade Antônio Estevão de Carvalho"
-}
-```
-
-#### Usar como Lib
-
-Gocep também poderá ser usado como Lib, ou seja você irá conseguir fazer um import em seu pkg/searchcep e fazer a chamada direto do seu método em seu código.
-
-```go
-
-package main
-
-import (
-	"fmt"
-	"github.com/jeffotoni/gocep/pkg/cep"
-)
-
-func main() {
-	result, wecep, err := cep.Search("6233903")
-	fmt.Println(err)
-	fmt.Println(result) // json
-	fmt.Println(wecep) // object WeCep
-}
-
-```
-
-Ou se preferir for criar seu próprio serviço em Go e sua api basta fazer como exemplo abaixo:
-
-#### Criando seu próprio WebServer usando gocep
-```bash
-package main
-
-import (
-	"log"
-	"net/http"
-	"fmt"
-	"github.com/jeffotoni/gocep/pkg/cep"
-)
-
-func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/cep/", func(w http.ResponseWriter, r *http.Request){
-		w.Header().Add("Content-Type", "application/json")
-		cepstr := strings.Split(r.URL.Path[1:], "/")[1]
-		if len(cepstr) != 8 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		result, wecep, err := cep.Search(cepstr)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(result))
-			return
-		}
-
-		if !cep.ValidCep(wecep) {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(result))
-	})
-	log.Fatal(http.ListenAndServe("0.0.0.0:8080"))
-}
-```
-Temos uma estrutura padrão de retorno do JSON.
-
-#### Struct Go
-```go
-
-type WeCep struct {
-	Cidade     string `json:"cidade"`
-	Uf         string `json:"uf"`
-	Logradouro string `json:"logradouro"`
-	Bairro     string `json:"bairro"`
-}
-
-```
-
-#### Saida Json
+### Success Response (`200`)
 ```json
-
-	{
-		"cidade":"",
-		"uf":"",
-		"logradouro":"",
-		"bairro":""
-	}
-
+{
+  "cidade": "São Paulo",
+  "uf": "SP",
+  "logradouro": "Rua Esperança",
+  "bairro": "Cidade Antônio Estevão de Carvalho"
+}
 ```
 
+### No Content (`204`)
+Returned when CEP format is valid but no provider returned a complete address.
+
+### Error Response Pattern
+All handler-level errors follow the same JSON shape:
+```json
+{
+  "error": {
+    "code": "invalid_cep",
+    "message": "cep must contain exactly 8 digits"
+  }
+}
+```
+
+Examples of error codes:
+- `method_not_allowed` (`405`)
+- `invalid_endpoint` (`302`)
+- `invalid_cep` (`400`)
+- `search_error` (`400`)
+- `not_found` (`404`)
+
+## Library Usage
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/cssbruno/gocep/pkg/cep"
+)
+
+func main() {
+	result, normalized, err := cep.Search("08226021")
+	fmt.Println("error:", err)
+	fmt.Println("json:", result)
+	fmt.Println("struct:", normalized)
+}
+```
+
+## Configuration
+Main environment variables from [`config/config.go`](config/config.go):
+- `PORT` (default: `0.0.0.0:8080`)
+- `CACHE_ENABLE` (default: `true`)
+- `TTL_CACHE` seconds (default: `172800`)
+- `TIMEOUT_SEARCH_CEP` seconds (default: `15`)
+- `HTTP_CLIENT_MAXIDLECONNS`
+- `HTTP_CLIENT_MAXIDLECONNSPERHOST`
+- `IDLE_CONN_TIMEOUT`
+- `TIMEOUT`
+- `INSECURE_SKIP_VERIFY` (default: `false`)
+
+## Examples
+Check language examples under [`examples/`](examples/):
+- `nodejs`
+- `python`
+- `php`
+- `javascript`
+- `go` (lib/client/server)
+- `rust`
+- `c`
+- `c++`
+
+## Development
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+```

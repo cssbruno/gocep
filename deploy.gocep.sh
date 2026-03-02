@@ -4,7 +4,7 @@ DATA_ISO=$(date +%Y-%m-%d-%H-%M-%S)
 echo -e "-------------------------------------- Clean <none> images ---------------------------------------"
 docker rmi $(docker images | grep "<none>" | awk '{print $3}') --force
 echo -e "\033[0;33m######################################### pull ########################################\033[0m"
-docker pull jeffotoni/gocep
+docker pull cssbruno/gocep
 
 docker-compose stop gocep
 docker-compose rm --force gocep
