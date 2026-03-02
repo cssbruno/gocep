@@ -19,7 +19,7 @@ var (
 	TTlCache         = env.GetInt("TTL_CACHE", 172800)      // secouds => 2 days
 
 	// httpClient is used to make HTTP requests with TLS configuration
-	InsecureSkipVerify  = env.GetBool("INSECURE_SKIP_VERIFY", true)         // Skip TLS verification for testing purposes
+	InsecureSkipVerify  = env.GetBool("INSECURE_SKIP_VERIFY", false)        // Skip TLS verification for testing purposes
 	MaxIdleConns        = env.GetInt("HTTP_CLIENT_MAXIDLECONNS", 100)       // Maximum number of idle connections
 	MaxIdleConnsPerHost = env.GetInt("HTTP_CLIENT_MAXIDLECONNSPERHOST", 10) // Maximum number of idle connections per host
 	IdleConnTimeout     = time.Duration(env.GetInt("IDLE_CONN_TIMEOUT", 90)) * time.Second

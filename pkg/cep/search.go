@@ -20,19 +20,30 @@ type Result struct {
 // Search busca o cep informado de forma concorrente nas APIs definidas em [pkg/models/endpoints.go],
 // retornando a primeira resposta(string em formato JSON) e um erro.
 func Search(cep string) (jsonCep string, wecep models.WeCep, err error) {
+	if len(cep) == 0 {
+		jsonCep = config.JsonDefault
+		err = json.Unmarshal([]byte(jsonCep), &wecep)
+		return
+	}
+
 	if config.CACHE_ENABLE {
 		jsonCep = gocache.Get(cep)
 		if len(jsonCep) > 0 {
-			json.Unmarshal([]byte(jsonCep), &wecep)
-			return
+			if err = json.Unmarshal([]byte(jsonCep), &wecep); err == nil {
+				return
+			}
 		}
 	}
 
 	var chResult = make(chan Result, len(models.Endpoints))
 	runtime.GOMAXPROCS(config.NumCPU)
 
-	ctx, cancel := context.WithTimeout(context.Background(), config.CancelCTXSearch)
-	defer cancel()
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(),
+		time.Duration(config.TimeOutSearchCep)*time.Second)
+	defer timeoutCancel()
+
+	ctx, cancelRequests := context.WithCancel(timeoutCtx)
+	defer cancelRequests()
 
 	for _, e := range models.Endpoints {
 		endpoint := e.Url
@@ -45,13 +56,17 @@ func Search(cep string) (jsonCep string, wecep models.WeCep, err error) {
 			} else {
 				NewRequestWithContext(ctx, cancel, cep, source, method, endpoint, chResult)
 			}
-		}(cancel, cep, method, source, endpoint, payload, chResult)
+		}(cancelRequests, cep, method, source, endpoint, payload, chResult)
 	}
 
 	select {
 	case result := <-chResult:
 		jsonCep = string(result.Body)
-		json.Unmarshal([]byte(jsonCep), &wecep)
+		if err = json.Unmarshal([]byte(jsonCep), &wecep); err != nil {
+			jsonCep = config.JsonDefault
+			err = json.Unmarshal([]byte(jsonCep), &wecep)
+			return
+		}
 		if wecep.Cidade != "" && wecep.Logradouro != "" && wecep.Uf != "" && wecep.Bairro != "" {
 			if config.CACHE_ENABLE {
 				gocache.SetTTL(cep, string(result.Body), time.Duration(config.TTlCache)*time.Second)
@@ -59,11 +74,10 @@ func Search(cep string) (jsonCep string, wecep models.WeCep, err error) {
 		}
 		return
 
-	case <-time.After(time.Duration(config.TimeOutSearchCep) * time.Second):
-		cancel()
+	case <-timeoutCtx.Done():
 	}
 	jsonCep = config.JsonDefault
-	json.Unmarshal([]byte(jsonCep), &wecep)
+	err = json.Unmarshal([]byte(jsonCep), &wecep)
 	return
 }
 
