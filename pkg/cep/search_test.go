@@ -11,7 +11,17 @@ import (
 
 // go test -run ^TestSearch$ -v
 func TestSearch(t *testing.T) {
+	oldCacheEnable := config.CACHE_ENABLE
+	config.CACHE_ENABLE = true
+	t.Cleanup(func() {
+		config.CACHE_ENABLE = oldCacheEnable
+	})
+
+	gocache.SetTTL("08226024",
+		`{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
+		time.Duration(config.TTlCache)*time.Second)
 	gocache.SetTTL("01001000", `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`, time.Duration(config.TTlCache)*time.Second)
+
 	type args struct {
 		cep string
 	}
@@ -19,28 +29,28 @@ func TestSearch(t *testing.T) {
 		name    string
 		args    args
 		want    string
-		want2   string
+		wantCep bool
 		wantErr bool
 	}{
 		{
 			name:    "test_search_1",
 			args:    args{"08226024"},
 			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
-			want2:   `{"cidade":"São Paulo","uf":"SP","logradouro":"Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
+			wantCep: true,
 			wantErr: false, // (err != nil) => false
 		},
 		{
 			name:    "test_search_2",
 			args:    args{"01001000"},
 			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
-			want2:   ``,
+			wantCep: true,
 			wantErr: false,
 		},
 		{
 			name:    "test_search_3",
 			args:    args{""},
 			want:    `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
-			want2:   ``,
+			wantCep: false,
 			wantErr: false,
 		},
 	}
@@ -51,12 +61,12 @@ func TestSearch(t *testing.T) {
 				t.Errorf("Search() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want && got != tt.want2 {
+			if got != tt.want {
 				t.Errorf("Search() = %v, want %v", got, tt.want)
 			}
 
-			if !ValidCep(wecep) {
-				t.Log("validado wecep")
+			if ValidCep(wecep) != tt.wantCep {
+				t.Errorf("ValidCep() = %v, want %v", ValidCep(wecep), tt.wantCep)
 			}
 		})
 	}

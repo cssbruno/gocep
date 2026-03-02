@@ -5,10 +5,25 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/jeffotoni/gocep/config"
+	"github.com/jeffotoni/gocep/service/gocache"
 )
 
 // go test -run ^TestSearchCep$ -v
 func TestSearchCep(t *testing.T) {
+	oldCacheEnable := config.CACHE_ENABLE
+	config.CACHE_ENABLE = true
+	t.Cleanup(func() {
+		config.CACHE_ENABLE = oldCacheEnable
+	})
+
+	gocache.SetTTL("08226021",
+		`{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
+		time.Duration(config.TTlCache)*time.Second)
+	gocache.SetTTL("00000000", config.JsonDefault, time.Duration(config.TTlCache)*time.Second)
+
 	type args struct {
 		method string
 		ctype  string

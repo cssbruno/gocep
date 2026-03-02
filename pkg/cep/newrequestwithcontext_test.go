@@ -2,147 +2,147 @@ package cep
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/jeffotoni/gocep/config"
 )
-
-// Esse exemplo faz um requisição para a API do viacep
-// func ExampleNewRequestWithContext() {
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	cep := "01001000"
-// 	source := "viacep"
-// 	method := http.MethodGet
-// 	endpoint := "https://viacep.com.br/ws/%s/json/"
-
-// 	chResult := make(chan Result)
-
-// 	go NewRequestWithContext(ctx, cancel, cep, source, method, endpoint, chResult)
-
-// 	var result string
-// 	select {
-// 	case got := <-chResult:
-// 		result = string(got.Body)
-// 	case <-time.After(time.Duration(15) * time.Second):
-// 		// tratar o erro, apenas a resposta está presente no chResult
-// 	}
-// 	fmt.Println(result)
-// 	// Output: {"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}
-// }
 
 // go test -run ^TestNewRequestWithContext$ -v
 func TestNewRequestWithContext(t *testing.T) {
-	type args struct {
-		cep      string
-		source   string
-		method   string
-		endpoint string
-		chResult chan Result
-	}
 	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
+		name         string
+		cep          string
+		source       string
+		statusCode   int
+		responseBody string
+		want         string
+		wantPath     string
+		wantResult   bool
 	}{
-		{name: "test_new_request_with_context_cdnapicep_",
-			args: args{
-				cep:      "01001000",
-				source:   "cdnapicep",
-				method:   "GET",
-				endpoint: "https://cdn.apicep.com/file/apicep/%s.json",
-				chResult: make(chan Result),
-			},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé - lado ímpar","bairro":"Sé"}`,
-			wantErr: false,
+		{
+			name:         "cdnapicep_success",
+			cep:          "01001000",
+			source:       "cdnapicep",
+			statusCode:   http.StatusOK,
+			responseBody: `{"status":200,"code":"01001-000","state":"SP","city":"São Paulo","district":"Sé","address":"Praça da Sé - lado ímpar"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé - lado ímpar","bairro":"Sé"}`,
+			wantPath:     "/01001-000",
+			wantResult:   true,
 		},
-		{name: "test_new_request_with_context_githubjeffotoni_",
-			args: args{
-				cep:      "01001000",
-				source:   "githubjeffotoni",
-				method:   "GET",
-				endpoint: "https://raw.githubusercontent.com/jeffotoni/api.cep/master/v1/cep/%s",
-				chResult: make(chan Result),
-			},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
-			wantErr: false,
+		{
+			name:         "githubjeffotoni_success",
+			cep:          "01001000",
+			source:       "githubjeffotoni",
+			statusCode:   http.StatusOK,
+			responseBody: `{"cep":"01001-000","logradouro":"da Sé","bairro":"Sé","uf":"SP","cidade":"São Paulo"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
 		},
-		{name: "test_new_request_with_context_viacep_",
-			args: args{
-				cep:      "01001000",
-				source:   "viacep",
-				method:   "GET",
-				endpoint: "https://viacep.com.br/ws/%s/json/",
-				chResult: make(chan Result),
-			},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
-			wantErr: false,
+		{
+			name:         "viacep_success",
+			cep:          "01001000",
+			source:       "viacep",
+			statusCode:   http.StatusOK,
+			responseBody: `{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
 		},
-		{name: "test_new_request_with_context_postmon_",
-			args: args{
-				cep:      "01001000",
-				source:   "postmon",
-				method:   "GET",
-				endpoint: "https://api.postmon.com.br/v1/cep/%s",
-				chResult: make(chan Result),
-			},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
-			wantErr: false,
+		{
+			name:         "postmon_success",
+			cep:          "01001000",
+			source:       "postmon",
+			statusCode:   http.StatusOK,
+			responseBody: `{"bairro":"Sé","cidade":"São Paulo","logradouro":"Praça da Sé","estado":"SP"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
 		},
-		{name: "test_new_request_with_context_republicavirtual_",
-			args: args{
-				cep:      "01001000",
-				source:   "republicavirtual",
-				method:   "GET",
-				endpoint: "https://republicavirtual.com.br/web_cep.php?cep=%s&formato=json",
-				chResult: make(chan Result),
-			},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
-			wantErr: false,
+		{
+			name:         "republicavirtual_success",
+			cep:          "01001000",
+			source:       "republicavirtual",
+			statusCode:   http.StatusOK,
+			responseBody: `{"uf":"SP","cidade":"São Paulo","bairro":"Sé","logradouro":"da Sé"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
 		},
-		{name: "test_new_request_with_context_brasilapi_",
-			args: args{
-				cep:      "01001000",
-				source:   "brasilapi",
-				method:   "GET",
-				endpoint: "https://brasilapi.com.br/api/cep/v1/%s",
-				chResult: make(chan Result),
-			},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
-			wantErr: false,
+		{
+			name:         "brasilapi_success",
+			cep:          "01001000",
+			source:       "brasilapi",
+			statusCode:   http.StatusOK,
+			responseBody: `{"cep":"01001-000","state":"SP","city":"São Paulo","neighborhood":"Sé","street":"Praça da Sé"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
 		},
-		{name: "test_new_request_with_context_",
-			args: args{
-				cep:      "",
-				source:   "",
-				method:   "",
-				endpoint: "",
-				chResult: make(chan Result),
-			},
-			want:    ``,
-			wantErr: true,
+		{
+			name:         "invalid_json_no_result",
+			cep:          "01001000",
+			source:       "viacep",
+			statusCode:   http.StatusOK,
+			responseBody: `invalid-json`,
+			wantPath:     "/01001000",
+			wantResult:   false,
+		},
+		{
+			name:         "non_200_no_result",
+			cep:          "01001000",
+			source:       "viacep",
+			statusCode:   http.StatusBadGateway,
+			responseBody: `{"error":"upstream"}`,
+			wantPath:     "/01001000",
+			wantResult:   false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			var gotPath atomic.Value
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath.Store(r.URL.Path)
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
 
-			go func(cancel context.CancelFunc, cep, source, method, endpoint string, chResult chan<- Result) {
-				NewRequestWithContext(ctx, cancel, cep, source, method, endpoint, chResult)
-			}(cancel, tt.args.cep, tt.args.source, tt.args.method, tt.args.endpoint, tt.args.chResult)
+			oldClient := httpClient
+			httpClient = server.Client()
+			t.Cleanup(func() {
+				httpClient = oldClient
+			})
 
-			select {
-			case got := <-tt.args.chResult:
-				if string(got.Body) != tt.want && !tt.wantErr {
-					t.Errorf("NewRequestWithContext() = %v, want %v", string(got.Body), tt.want)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			chResult := make(chan Result, 1)
+			go NewRequestWithContext(ctx, cancel, tt.cep, tt.source, http.MethodGet, server.URL+"/%s", chResult)
+
+			if tt.wantResult {
+				select {
+				case got := <-chResult:
+					if string(got.Body) != tt.want {
+						t.Errorf("NewRequestWithContext() = %v, want %v", string(got.Body), tt.want)
+					}
+				case <-time.After(time.Second):
+					t.Fatalf("NewRequestWithContext() timeout waiting for result")
 				}
-			case <-time.After(time.Duration(config.TimeOutSearchCep) * time.Second):
-				if !tt.wantErr {
-					t.Errorf("NewRequestWithContext() = %v, want %v", "timeout", tt.want)
+			} else {
+				select {
+				case got := <-chResult:
+					t.Fatalf("NewRequestWithContext() unexpected result: %s", string(got.Body))
+				case <-time.After(200 * time.Millisecond):
 				}
-			default:
-				t.Log("done")
+			}
+
+			path, _ := gotPath.Load().(string)
+			if path != tt.wantPath {
+				t.Errorf("path = %q, want %q", path, tt.wantPath)
 			}
 		})
 	}
@@ -156,12 +156,12 @@ func TestAddHyphen(t *testing.T) {
 		want string
 	}{
 		{
-			name: "test_add_hyphen_",
+			name: "add_hyphen_valid",
 			cep:  "08226024",
 			want: "08226-024",
 		},
 		{
-			name: "test_add_hyphen_",
+			name: "add_hyphen_short",
 			cep:  "0822",
 			want: "0822",
 		},
