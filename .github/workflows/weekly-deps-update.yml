@@ -1,0 +1,53 @@
+name: Weekly Dependency Update
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-go-dependencies:
+    name: Update Go dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Update dependencies
+        run: |
+          go get -u -t ./...
+          go mod tidy
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Create dependency update PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/weekly-deps-update
+          delete-branch: true
+          commit-message: 'chore(deps): weekly Go dependency update'
+          title: 'chore(deps): weekly dependency update'
+          body: |
+            Automated weekly dependency update.
+
+            Changes made:
+            - Ran `go get -u -t ./...`
+            - Ran `go mod tidy`
+            - Ran `go test ./...`
+          labels: |
+            dependencies
+            automated
