@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build And Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Validate quality gates
+        run: |
+          go test ./...
+          go test -race ./...
+          go vet ./...
+
+      - name: Build release artifacts
+        run: |
+          set -eu
+          mkdir -p dist
+
+          targets=(
+            "linux amd64"
+            "linux arm64"
+            "darwin amd64"
+            "darwin arm64"
+            "windows amd64"
+          )
+
+          for target in "${targets[@]}"; do
+            set -- $target
+            goos="$1"
+            goarch="$2"
+
+            ext=""
+            if [ "$goos" = "windows" ]; then
+              ext=".exe"
+            fi
+
+            bin="gocep_${goos}_${goarch}${ext}"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+              go build -trimpath -ldflags="-s -w" -o "dist/${bin}" .
+
+            if [ "$goos" = "windows" ]; then
+              (
+                cd dist
+                zip -q "gocep_${goos}_${goarch}.zip" "${bin}"
+              )
+              rm -f "dist/${bin}"
+            else
+              tar -C dist -czf "dist/${bin}.tar.gz" "${bin}"
+              rm -f "dist/${bin}"
+            fi
+          done
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

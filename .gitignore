@@ -5,3 +5,5 @@ deploy.gocep.aws.sh
 .vscode
 .idea
 .tool-versions
+coverage.out
+dist/

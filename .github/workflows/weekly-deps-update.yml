@@ -9,6 +9,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: weekly-deps-update
+  cancel-in-progress: true
+
 jobs:
   update-go-dependencies:
     name: Update Go dependencies
@@ -31,8 +35,11 @@ jobs:
           go get -u -t ./...
           go mod tidy
 
-      - name: Run tests
-        run: go test ./...
+      - name: Validate quality gates
+        run: |
+          go test ./...
+          go test -race ./...
+          go vet ./...
 
       - name: Create dependency update PR
         uses: peter-evans/create-pull-request@v6
@@ -48,6 +55,8 @@ jobs:
             - Ran `go get -u -t ./...`
             - Ran `go mod tidy`
             - Ran `go test ./...`
+            - Ran `go test -race ./...`
+            - Ran `go vet ./...`
           labels: |
             dependencies
             automated

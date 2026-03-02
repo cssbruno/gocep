@@ -6,15 +6,19 @@ on:
   push:
     branches: [master, main]
     tags:
-      - 'v*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Go Tests
+    name: Go Quality Checks
     runs-on: ubuntu-latest
 
     steps:
@@ -30,5 +34,11 @@ jobs:
       - name: Download modules
         run: go mod download
 
-      - name: Run tests
+      - name: Run unit tests
         run: go test ./...
+
+      - name: Run race tests
+        run: go test -race ./...
+
+      - name: Run vet
+        run: go vet ./...
