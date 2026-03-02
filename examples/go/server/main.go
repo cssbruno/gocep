@@ -38,14 +38,14 @@ func HandlerCEP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, wecep, err := cep.Search(cepstr)
+	result, address, err := cep.Search(cepstr)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if !cep.ValidCEP(wecep) {
+	if !cep.ValidCEP(address) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

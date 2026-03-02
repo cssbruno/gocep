@@ -14,6 +14,8 @@ type apiError struct {
 	Message string `json:"message"`
 }
 
+var marshalAPIError = json.Marshal
+
 func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -25,7 +27,7 @@ func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 		},
 	}
 
-	payload, err := json.Marshal(resp)
+	payload, err := marshalAPIError(resp)
 	if err != nil {
 		return
 	}

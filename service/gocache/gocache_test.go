@@ -5,11 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cssbruno/gocep/config"
 	gcache "github.com/patrickmn/go-cache"
 )
 
 // go test -run ^TestRun'$ -v
 func TestRun(t *testing.T) {
+	resetCacheForTests()
+
 	tests := []struct {
 		name    string
 		want    *gcache.Cache
@@ -30,6 +33,7 @@ func TestRun(t *testing.T) {
 
 // go test -run ^TestSetTTL'$ -v
 func TestSetTTL(t *testing.T) {
+	resetCacheForTests()
 	TestRun(t)
 	type args struct {
 		key   string
@@ -89,6 +93,7 @@ func TestSetTTL(t *testing.T) {
 
 // go test -run ^TestGet'$ -v
 func TestGet(t *testing.T) {
+	resetCacheForTests()
 	TestRun(t)
 	TestSetTTL(t)
 	type args struct {
@@ -131,6 +136,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestSetAnyTTLAndGetAny(t *testing.T) {
+	resetCacheForTests()
 	TestRun(t)
 
 	type cacheValue struct {
@@ -153,5 +159,77 @@ func TestSetAnyTTLAndGetAny(t *testing.T) {
 	}
 	if cast != value {
 		t.Fatalf("GetAny() = %+v, want %+v", cast, value)
+	}
+}
+
+func TestSetAnyTTL_InvalidInput(t *testing.T) {
+	resetCacheForTests()
+	if ok := SetAnyTTL("", "value", time.Second); ok {
+		t.Fatalf("SetAnyTTL() with empty key = true, want false")
+	}
+	if ok := SetAnyTTL("key", nil, time.Second); ok {
+		t.Fatalf("SetAnyTTL() with nil value = true, want false")
+	}
+}
+
+func TestGetAny_EmptyKey(t *testing.T) {
+	resetCacheForTests()
+	got, found := GetAny("")
+	if found {
+		t.Fatalf("GetAny(\"\") found = true, want false")
+	}
+	if got != nil {
+		t.Fatalf("GetAny(\"\") value = %v, want nil", got)
+	}
+}
+
+func TestGet_NonStringValue(t *testing.T) {
+	resetCacheForTests()
+	if ok := SetAnyTTL("typed-not-string", struct{ ID int }{ID: 1}, time.Second); !ok {
+		t.Fatalf("SetAnyTTL() = false, want true")
+	}
+	if got := Get("typed-not-string"); got != "" {
+		t.Fatalf("Get() = %q, want empty string", got)
+	}
+}
+
+func TestSerializeForRedis_JSONField(t *testing.T) {
+	type cachedLike struct {
+		JSON string
+	}
+
+	got, ok := serializeForRedis(cachedLike{JSON: `{"cidade":"São Paulo"}`})
+	if !ok {
+		t.Fatalf("serializeForRedis() ok = false, want true")
+	}
+	if got != `{"cidade":"São Paulo"}` {
+		t.Fatalf("serializeForRedis() = %q, want %q", got, `{"cidade":"São Paulo"}`)
+	}
+}
+
+func TestSerializeForRedis_UnsupportedType(t *testing.T) {
+	_, ok := serializeForRedis(struct{ Value int }{Value: 1})
+	if ok {
+		t.Fatalf("serializeForRedis() ok = true, want false for unsupported type")
+	}
+}
+
+func TestRun_RedisFallbackStillProvidesMemoryCache(t *testing.T) {
+	resetCacheForTests()
+
+	oldBackend := config.CacheBackend
+	oldAddr := config.RedisAddr
+	oldPrefix := config.RedisPrefix
+	config.CacheBackend = "redis"
+	config.RedisAddr = "127.0.0.1:1"
+	config.RedisPrefix = "gocep:"
+	t.Cleanup(func() {
+		config.CacheBackend = oldBackend
+		config.RedisAddr = oldAddr
+		config.RedisPrefix = oldPrefix
+	})
+
+	if got := Run(); got == nil {
+		t.Fatalf("Run() = nil, want non-nil memory cache fallback")
 	}
 }

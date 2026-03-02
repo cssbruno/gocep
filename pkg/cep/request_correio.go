@@ -3,11 +3,12 @@ package cep
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"encoding/xml"
+	"io"
 	"net/http"
 	"strings"
 
+	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/models"
 )
 
@@ -21,40 +22,36 @@ func requestCorreio(ctx context.Context, cancel context.CancelFunc, cep, method,
 
 	req.Header.Set("Content-Type", "text/xml; charset=utf-8")
 
-	response, err := httpClient.Do(req)
-	if err != nil {
-		return
-	}
-	if response == nil {
+	response, ok := executeRequest(req)
+	if !ok {
 		return
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
+
+	maxBody := config.MaxProviderBody
+	rawBody, err := io.ReadAll(io.LimitReader(response.Body, maxBody+1))
+	if err != nil {
+		return
+	}
+	if int64(len(rawBody)) > maxBody {
 		return
 	}
 
 	correio := new(models.Correio)
-	err = xml.NewDecoder(response.Body).Decode(correio)
+	err = xml.Unmarshal(rawBody, correio)
 	if err == nil {
 		c := correio.Body.LookupCEPResponse.Return
-		wecep := models.WeCep{
+		address := models.CEPAddress{
 			City:         c.City,
 			StateCode:    c.StateCode,
 			Street:       c.Address,
 			Neighborhood: c.Neighborhood,
 		}
-		b, err := json.Marshal(wecep)
-		if err == nil {
-			select {
-			case chResult <- Result{Body: b, WeCep: wecep}:
-				cancel()
-			case <-ctx.Done():
-			}
-		}
+		sendAddressResult(ctx, cancel, chResult, address)
 	}
 }
 
-// Deprecated: use internal requestCorreio.
+// Deprecated: use Search.
 func NewRequestWithContextCorreio(ctx context.Context, cancel context.CancelFunc, cep, source, method, endpoint, payload string, chResult chan<- Result) {
 	_ = source
 	requestCorreio(ctx, cancel, cep, method, endpoint, payload, chResult)

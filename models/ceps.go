@@ -4,8 +4,8 @@ import (
 	"encoding/xml"
 )
 
-// WeCep is the normalized response used by this project.
-type WeCep struct {
+// CEPAddress is the normalized address response used by this project.
+type CEPAddress struct {
 	City         string `json:"cidade"`
 	StateCode    string `json:"uf"`
 	Street       string `json:"logradouro"`
@@ -101,4 +101,29 @@ type BrasilAPI struct {
 	City         string `json:"city"`
 	Neighborhood string `json:"neighborhood"`
 	Street       string `json:"street"`
+}
+
+// OpenCEP provider response.
+type OpenCEP struct {
+	PostalCode   string `json:"cep"`
+	Street       string `json:"logradouro"`
+	Complement   string `json:"complemento"`
+	Neighborhood string `json:"bairro"`
+	City         string `json:"localidade"`
+	StateCode    string `json:"uf"`
+	State        string `json:"estado"`
+	IBGE         string `json:"ibge"`
+}
+
+// AwesomeAPI provider response.
+type AwesomeAPI struct {
+	PostalCode   string `json:"cep"`
+	AddressType  string `json:"address_type"`
+	AddressName  string `json:"address_name"`
+	Street       string `json:"address"`
+	StateCode    string `json:"state"`
+	Neighborhood string `json:"district"`
+	City         string `json:"city"`
+	CityIBGE     string `json:"city_ibge"`
+	DDD          string `json:"ddd"`
 }

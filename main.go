@@ -21,8 +21,13 @@ func main() {
 	mux.HandleFunc("/", handlers.NotFound)
 	muxcors := cors.Default().Handler(mux)
 	server := &http.Server{
-		Addr:    config.Port,
-		Handler: muxcors,
+		Addr:              config.Port,
+		Handler:           muxcors,
+		ReadHeaderTimeout: config.ServerReadHeaderTO,
+		ReadTimeout:       config.ServerReadTO,
+		WriteTimeout:      config.ServerWriteTO,
+		IdleTimeout:       config.ServerIdleTO,
+		MaxHeaderBytes:    config.ServerMaxHeaderB,
 	}
 	log.Println(gcolor.YellowCor("Server Run Port"), config.Port)
 	log.Println(gcolor.YellowCor("/v1/cep/{cep}"))

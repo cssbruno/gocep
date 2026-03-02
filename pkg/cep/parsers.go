@@ -9,65 +9,105 @@ import (
 
 var errUnknownParserSource = errors.New("unknown parser source")
 
-func ParseWeCep(source string, body []byte) (models.WeCep, error) {
-	wecep := models.WeCep{}
-	switch source {
-	case models.SourceCdnApiCep:
-		var cdnapi models.CdnApiCep
-		if err := json.Unmarshal(body, &cdnapi); err != nil {
-			return models.WeCep{}, err
-		}
-		wecep.City = cdnapi.City
-		wecep.StateCode = cdnapi.State
-		wecep.Street = cdnapi.Address
-		wecep.Neighborhood = cdnapi.District
-	case models.SourceGitHubJeffotoni:
-		var githubjeff models.GithubJeffotoni
-		if err := json.Unmarshal(body, &githubjeff); err != nil {
-			return models.WeCep{}, err
-		}
-		wecep.City = githubjeff.City
-		wecep.StateCode = githubjeff.StateCode
-		wecep.Street = githubjeff.Street
-		wecep.Neighborhood = githubjeff.Neighborhood
-	case models.SourceViaCep:
-		var viacep models.ViaCep
-		if err := json.Unmarshal(body, &viacep); err != nil {
-			return models.WeCep{}, err
-		}
-		wecep.City = viacep.City
-		wecep.StateCode = viacep.StateCode
-		wecep.Street = viacep.Street
-		wecep.Neighborhood = viacep.Neighborhood
-	case models.SourcePostmon:
-		var postmon models.PostMon
-		if err := json.Unmarshal(body, &postmon); err != nil {
-			return models.WeCep{}, err
-		}
-		wecep.City = postmon.City
-		wecep.StateCode = postmon.State
-		wecep.Street = postmon.Street
-		wecep.Neighborhood = postmon.Neighborhood
-	case models.SourceRepublicaVirtual:
-		var repub models.RepublicaVirtual
-		if err := json.Unmarshal(body, &repub); err != nil {
-			return models.WeCep{}, err
-		}
-		wecep.City = repub.City
-		wecep.StateCode = repub.StateCode
-		wecep.Street = repub.Street
-		wecep.Neighborhood = repub.Neighborhood
-	case models.SourceBrasilAPI:
-		var brasilapi models.BrasilAPI
-		if err := json.Unmarshal(body, &brasilapi); err != nil {
-			return models.WeCep{}, err
-		}
-		wecep.City = brasilapi.City
-		wecep.StateCode = brasilapi.State
-		wecep.Street = brasilapi.Street
-		wecep.Neighborhood = brasilapi.Neighborhood
-	default:
-		return models.WeCep{}, errUnknownParserSource
+type sourceParser func(body []byte) (models.CEPAddress, error)
+
+var parserBySource = map[string]sourceParser{
+	models.SourceCdnApiCep:        parseCDNApiCEP,
+	models.SourceGitHubJeffotoni:  parseGitHubJeffotoni,
+	models.SourceViaCep:           parseViaCEP,
+	models.SourcePostmon:          parsePostmon,
+	models.SourceRepublicaVirtual: parseRepublicaVirtual,
+	models.SourceBrasilAPI:        parseBrasilAPI,
+	models.SourceOpenCEP:          parseOpenCEP,
+	models.SourceAwesomeAPI:       parseAwesomeAPI,
+}
+
+func ParseCEPAddress(source string, body []byte) (models.CEPAddress, error) {
+	parser, ok := parserBySource[source]
+	if !ok {
+		return models.CEPAddress{}, errUnknownParserSource
 	}
-	return wecep, nil
+	return parser(body)
+}
+
+func parseCDNApiCEP(body []byte) (models.CEPAddress, error) {
+	var payload models.CdnApiCep
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.State, payload.Address, payload.District), nil
+}
+
+func parseGitHubJeffotoni(body []byte) (models.CEPAddress, error) {
+	var payload models.GithubJeffotoni
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.StateCode, payload.Street, payload.Neighborhood), nil
+}
+
+func parseViaCEP(body []byte) (models.CEPAddress, error) {
+	var payload models.ViaCep
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.StateCode, payload.Street, payload.Neighborhood), nil
+}
+
+func parsePostmon(body []byte) (models.CEPAddress, error) {
+	var payload models.PostMon
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.State, payload.Street, payload.Neighborhood), nil
+}
+
+func parseRepublicaVirtual(body []byte) (models.CEPAddress, error) {
+	var payload models.RepublicaVirtual
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.StateCode, payload.Street, payload.Neighborhood), nil
+}
+
+func parseBrasilAPI(body []byte) (models.CEPAddress, error) {
+	var payload models.BrasilAPI
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.State, payload.Street, payload.Neighborhood), nil
+}
+
+func parseOpenCEP(body []byte) (models.CEPAddress, error) {
+	var payload models.OpenCEP
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.StateCode, payload.Street, payload.Neighborhood), nil
+}
+
+func parseAwesomeAPI(body []byte) (models.CEPAddress, error) {
+	var payload models.AwesomeAPI
+	if err := decodeProviderPayload(body, &payload); err != nil {
+		return models.CEPAddress{}, err
+	}
+	return buildAddress(payload.City, payload.StateCode, payload.Street, payload.Neighborhood), nil
+}
+
+func decodeProviderPayload(body []byte, dst any) error {
+	return json.Unmarshal(body, dst)
+}
+
+func buildAddress(city, stateCode, street, neighborhood string) models.CEPAddress {
+	return models.CEPAddress{
+		City:         city,
+		StateCode:    stateCode,
+		Street:       street,
+		Neighborhood: neighborhood,
+	}
+}
+
+// Deprecated: use ParseCEPAddress.
+func ParseWeCep(source string, body []byte) (models.CEPAddress, error) {
+	return ParseCEPAddress(source, body)
 }

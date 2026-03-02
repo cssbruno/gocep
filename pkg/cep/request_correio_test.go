@@ -2,6 +2,8 @@ package cep
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -105,5 +107,138 @@ func TestRequestCorreio(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRequestCorreio_Non200NoResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, `upstream error`)
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	go requestCorreio(ctx, cancel, "01001000", http.MethodPost, server.URL, correioPayloadTemplate, chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestNewRequestWithContextCorreioDeprecatedAlias(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `<Envelope><Body><consultaCEPResponse><return><bairro>Sé</bairro><cidade>São Paulo</cidade><end>Praça da Sé</end><uf>SP</uf></return></consultaCEPResponse></Body></Envelope>`)
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	go NewRequestWithContextCorreio(ctx, cancel, "01001000", "ignored", http.MethodPost, server.URL, correioPayloadTemplate, chResult)
+
+	select {
+	case got := <-chResult:
+		want := `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
+		if string(got.Body) != want {
+			t.Fatalf("NewRequestWithContextCorreio() = %s, want %s", string(got.Body), want)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("NewRequestWithContextCorreio() timeout")
+	}
+}
+
+func TestRequestCorreio_DoErrorNoResult(t *testing.T) {
+	oldClient := httpClient
+	httpClient = &http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			return nil, errors.New("forced do error")
+		}),
+	}
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestCorreio(ctx, cancel, "01001000", http.MethodPost, "http://example.com", correioPayloadTemplate, chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
+	}
+}
+
+func TestRequestCorreio_NilResponseNoResult(t *testing.T) {
+	oldClient := httpClient
+	httpClient = &http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			return nil, nil
+		}),
+	}
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestCorreio(ctx, cancel, "01001000", http.MethodPost, "http://example.com", correioPayloadTemplate, chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
+	}
+}
+
+func TestRequestCorreio_MarshalErrorNoResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `<Envelope><Body><consultaCEPResponse><return><bairro>Sé</bairro><cidade>São Paulo</cidade><end>Praça da Sé</end><uf>SP</uf></return></consultaCEPResponse></Body></Envelope>`)
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	oldMarshal := marshalAddressJSON
+	marshalAddressJSON = func(any) ([]byte, error) {
+		return nil, errors.New("forced marshal error")
+	}
+	t.Cleanup(func() {
+		marshalAddressJSON = oldMarshal
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestCorreio(ctx, cancel, "01001000", http.MethodPost, server.URL, correioPayloadTemplate, chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
 	}
 }

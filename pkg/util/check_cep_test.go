@@ -50,3 +50,9 @@ func BenchmarkCheckCEPValid(b *testing.B) {
 		}
 	}
 }
+
+func TestCheckCepDeprecatedAlias(t *testing.T) {
+	if err := CheckCep("08226021"); err != nil {
+		t.Fatalf("CheckCep() error = %v, want nil", err)
+	}
+}

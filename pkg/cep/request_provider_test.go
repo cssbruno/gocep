@@ -2,8 +2,11 @@ package cep
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -79,6 +82,26 @@ func TestRequestProvider(t *testing.T) {
 			source:       models.SourceBrasilAPI,
 			statusCode:   http.StatusOK,
 			responseBody: `{"cep":"01001-000","state":"SP","city":"São Paulo","neighborhood":"Sé","street":"Praça da Sé"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
+		},
+		{
+			name:         "opencep_success",
+			cep:          "01001000",
+			source:       models.SourceOpenCEP,
+			statusCode:   http.StatusOK,
+			responseBody: `{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`,
+			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
+			wantPath:     "/01001000",
+			wantResult:   true,
+		},
+		{
+			name:         "awesomeapi_success",
+			cep:          "01001000",
+			source:       models.SourceAwesomeAPI,
+			statusCode:   http.StatusOK,
+			responseBody: `{"cep":"01001000","address":"Praça da Sé","state":"SP","district":"Sé","city":"São Paulo"}`,
 			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
 			wantPath:     "/01001000",
 			wantResult:   true,
@@ -175,5 +198,219 @@ func TestAddHyphen(t *testing.T) {
 				t.Errorf("addHyphen() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewRequestWithContextDeprecatedAlias(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+
+	go NewRequestWithContext(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, server.URL+"/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		want := `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
+		if string(got.Body) != want {
+			t.Fatalf("NewRequestWithContext() body = %s, want %s", string(got.Body), want)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("NewRequestWithContext() timeout")
+	}
+}
+
+func TestRequestProvider_RequestBuildError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+
+	go requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "\n", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("read error") }
+func (errReader) Close() error             { return nil }
+
+func TestRequestProvider_ReadBodyError(t *testing.T) {
+	oldClient := httpClient
+	httpClient = &http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(errReader{}),
+				Header:     make(http.Header),
+				Request:    r,
+			}, nil
+		}),
+	}
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "http://example.com/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
+	}
+}
+
+func TestRequestProvider_ContextDoneBranch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	chResult := make(chan Result) // unbuffered to avoid send fallback
+	requestProvider(ctx, func() {}, "01001000", models.SourceViaCep, http.MethodGet, server.URL+"/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
+	}
+}
+
+func TestRequestProvider_UnknownSourceNoResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"any":"thing"}`)
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestProvider(ctx, cancel, "01001000", "unknown-source", http.MethodGet, server.URL+"/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", strings.TrimSpace(string(got.Body)))
+	default:
+	}
+}
+
+func TestRequestProvider_NilResponseNoResult(t *testing.T) {
+	oldClient := httpClient
+	httpClient = &http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			return nil, nil
+		}),
+	}
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "http://example.com/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
+	}
+}
+
+func TestRequestProvider_EmptyBodyNoResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, server.URL+"/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
+	}
+}
+
+func TestRequestProvider_MarshalErrorNoResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
+	}))
+	defer server.Close()
+
+	oldClient := httpClient
+	httpClient = server.Client()
+	t.Cleanup(func() {
+		httpClient = oldClient
+	})
+
+	oldMarshal := marshalAddressJSON
+	marshalAddressJSON = func(any) ([]byte, error) {
+		return nil, errors.New("forced marshal error")
+	}
+	t.Cleanup(func() {
+		marshalAddressJSON = oldMarshal
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	chResult := make(chan Result, 1)
+	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, server.URL+"/%s", chResult)
+
+	select {
+	case got := <-chResult:
+		t.Fatalf("unexpected result: %s", string(got.Body))
+	default:
 	}
 }

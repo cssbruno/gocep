@@ -9,6 +9,8 @@ import (
 	"github.com/cssbruno/gocep/pkg/util"
 )
 
+var searchCEP = cep.Search
+
 func SearchCep(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method != http.MethodGet {
@@ -22,18 +24,19 @@ func SearchCep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := util.CheckCEP(cepstr); err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_cep", "cep must contain exactly 8 digits")
+	normalizedCEP, err := util.NormalizeCEP(cepstr)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_cep", "cep must be in 00000000 or 00000-000 format")
 		return
 	}
 
-	result, wecep, err := cep.Search(cepstr)
+	result, address, err := searchCEP(normalizedCEP)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "search_error", "failed to search cep")
 		return
 	}
 
-	if !cep.ValidCEP(wecep) {
+	if !cep.ValidCEP(address) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

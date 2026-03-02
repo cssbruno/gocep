@@ -26,12 +26,12 @@ func GetInt64(name string, defaultValue int64) int64 {
 		return defaultValue
 	}
 
-	value, err := strconv.Atoi(raw)
+	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return defaultValue
 	}
 
-	return int64(value)
+	return value
 }
 
 // 1000000000 = 1s

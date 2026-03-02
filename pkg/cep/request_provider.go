@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
+	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/models"
 )
+
+var marshalAddressJSON = json.Marshal
 
 // requestProvider performs a concurrent request to one CEP provider endpoint.
 func requestProvider(ctx context.Context, cancel context.CancelFunc, cep, source, method,
@@ -20,28 +22,21 @@ func requestProvider(ctx context.Context, cancel context.CancelFunc, cep, source
 	endpoint = strings.Replace(endpoint, "%s", cep, 1)
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, nil)
 	if err != nil {
-		log.Println("error creating provider request:", err)
 		return
 	}
 
-	// fmt.Println(endpoint)
-
-	response, err := httpClient.Do(req)
-	if err != nil {
-		// log.Println("Error httpClient:", err)
-		return
-	}
-	if response == nil {
+	response, ok := executeRequest(req)
+	if !ok {
 		return
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
+
+	maxBody := config.MaxProviderBody
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxBody+1))
+	if err != nil {
 		return
 	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Println("Error io.ReadAll:", err)
+	if int64(len(body)) > maxBody {
 		return
 	}
 
@@ -49,24 +44,15 @@ func requestProvider(ctx context.Context, cancel context.CancelFunc, cep, source
 		return
 	}
 
-	wecep, err := ParseWeCep(source, body)
+	address, err := ParseCEPAddress(source, body)
 	if err != nil {
 		return
 	}
 
-	b, err := json.Marshal(wecep)
-	if err != nil {
-		return
-	}
-
-	select {
-	case chResult <- Result{Body: b, WeCep: wecep}:
-		cancel()
-	case <-ctx.Done():
-	}
+	sendAddressResult(ctx, cancel, chResult, address)
 }
 
-// Deprecated: use internal requestProvider.
+// Deprecated: use Search.
 func NewRequestWithContext(ctx context.Context, cancel context.CancelFunc, cep, source, method,
 	endpoint string, chResult chan<- Result) {
 	requestProvider(ctx, cancel, cep, source, method, endpoint, chResult)
