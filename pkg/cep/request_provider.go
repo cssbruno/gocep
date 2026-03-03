@@ -47,6 +47,7 @@ func requestProvider(ctx context.Context, cancel context.CancelFunc, cep, source
 	if err != nil {
 		return
 	}
+	address = withCEP(address, cep)
 
 	sendAddressResult(ctx, cancel, chResult, address)
 }

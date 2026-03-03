@@ -32,7 +32,7 @@ func TestRequestCorreio(t *testing.T) {
 		{
 			name:         "success",
 			responseBody: `<Envelope><Body><consultaCEPResponse><return><bairro>Sé</bairro><cidade>São Paulo</cidade><end>Praça da Sé</end><uf>SP</uf></return></consultaCEPResponse></Body></Envelope>`,
-			want:         `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
+			want:         `{"cep":"01001-000","cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`,
 			wantResult:   true,
 			useServer:    true,
 		},

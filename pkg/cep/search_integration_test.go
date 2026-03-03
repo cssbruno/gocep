@@ -14,7 +14,7 @@ import (
 
 func TestSearchIgnoresInvalidStringCacheAndUsesProviderResult(t *testing.T) {
 	const cepCode = "77777777"
-	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
+	const expectedBody = `{"cep":"77777-777","cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
 
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/"+cepCode {
@@ -54,7 +54,7 @@ func TestSearchIgnoresInvalidStringCacheAndUsesProviderResult(t *testing.T) {
 
 func TestSearchIntegrationFallbackAcrossHTTPProviders(t *testing.T) {
 	const cepCode = "01001000"
-	const expectedBody = `{"cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Fallback","bairro":"Centro"}`
+	const expectedBody = `{"cep":"01001-000","cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Fallback","bairro":"Centro"}`
 
 	var failCalls atomic.Int32
 	var successCalls atomic.Int32
@@ -104,7 +104,7 @@ func TestSearchIntegrationFallbackAcrossHTTPProviders(t *testing.T) {
 
 func TestSearchIntegrationFallbackFromCorreioToViaCEP(t *testing.T) {
 	const cepCode = "01001000"
-	const expectedBody = `{"cidade":"Sao Paulo","uf":"SP","logradouro":"Rua ViaCEP","bairro":"Centro"}`
+	const expectedBody = `{"cep":"01001-000","cidade":"Sao Paulo","uf":"SP","logradouro":"Rua ViaCEP","bairro":"Centro"}`
 
 	var correioCalls atomic.Int32
 	var viaCalls atomic.Int32
@@ -162,7 +162,7 @@ func TestSearchIntegrationFallbackFromCorreioToViaCEP(t *testing.T) {
 
 func TestSearchIgnoresIncompleteStringCacheAndUsesProviderResult(t *testing.T) {
 	const cepCode = "66666666"
-	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Completa","bairro":"Centro"}`
+	const expectedBody = `{"cep":"66666-666","cidade":"São Paulo","uf":"SP","logradouro":"Rua Completa","bairro":"Centro"}`
 
 	var calls atomic.Int32
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +204,7 @@ func TestSearchIgnoresIncompleteStringCacheAndUsesProviderResult(t *testing.T) {
 
 func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
 	const cepCode = "02020020"
-	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Dedupe","bairro":"Centro"}`
+	const expectedBody = `{"cep":"02020-020","cidade":"São Paulo","uf":"SP","logradouro":"Rua Dedupe","bairro":"Centro"}`
 
 	var calls atomic.Int32
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

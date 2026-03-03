@@ -521,10 +521,11 @@ func queryJSONEndpoint(ctx context.Context, httpClient *http.Client, maxBody int
 	}
 
 	address, err := ParseCEPAddress(endpoint.Source, body)
-	if err != nil || !isCompleteAddress(address) {
-		if err != nil {
-			return Result{}, err
-		}
+	if err != nil {
+		return Result{}, err
+	}
+	address = withCEP(address, cep)
+	if !isCompleteAddress(address) {
 		return Result{}, ErrNotFound
 	}
 
@@ -565,6 +566,7 @@ func queryCorreioEndpoint(ctx context.Context, httpClient *http.Client, maxBody 
 
 	responseAddress := correio.Body.LookupCEPResponse.Return
 	address := models.CEPAddress{
+		CEP:          formattedCEPOrRaw(cep),
 		City:         responseAddress.City,
 		StateCode:    responseAddress.StateCode,
 		Street:       responseAddress.Address,
@@ -595,28 +597,40 @@ func (c *Client) readCachedResult(cfg snapshot, cep string) (jsonCep string, add
 
 	switch cached := value.(type) {
 	case cachedResult:
+		cached.Address = withCEP(cached.Address, cep)
 		if cached.JSON == "" || !isCompleteAddress(cached.Address) {
 			c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: false, Error: ErrNotFound})
 			return "", models.CEPAddress{}, false
 		}
+		body, err := marshalAddressJSON(cached.Address)
+		if err != nil {
+			c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: false, Error: err})
+			return "", models.CEPAddress{}, false
+		}
 		c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: true})
-		return cached.JSON, cached.Address, true
+		return string(body), cached.Address, true
 	case string:
 		var parsedAddress models.CEPAddress
 		if err := json.Unmarshal([]byte(cached), &parsedAddress); err != nil {
 			c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: false, Error: err})
 			return "", models.CEPAddress{}, false
 		}
+		parsedAddress = withCEP(parsedAddress, cep)
 		if !isCompleteAddress(parsedAddress) {
 			c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: false, Error: ErrNotFound})
 			return "", models.CEPAddress{}, false
 		}
+		body, err := marshalAddressJSON(parsedAddress)
+		if err != nil {
+			c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: false, Error: err})
+			return "", models.CEPAddress{}, false
+		}
 		_ = cfg.cacheProvider.SetAnyTTL(cep, cachedResult{
-			JSON:    cached,
+			JSON:    string(body),
 			Address: parsedAddress,
 		}, cfg.options.CacheTTL)
 		c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: true})
-		return cached, parsedAddress, true
+		return string(body), parsedAddress, true
 	default:
 		c.emitCacheEvent(cfg.hooks, CacheEvent{CEP: cep, Operation: "read", Hit: false, Error: ErrNotFound})
 		return "", models.CEPAddress{}, false

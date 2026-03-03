@@ -18,7 +18,7 @@ type Options struct {
 
 func defaultOptions() Options {
 	return Options{
-		DefaultJSON:     `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
+		DefaultJSON:     `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`,
 		CacheEnabled:    true,
 		CacheTTL:        48 * time.Hour,
 		SearchTimeout:   15 * time.Second,
@@ -41,7 +41,7 @@ func SetOptions(next Options) {
 func normalizeOptions(in Options) Options {
 	out := in
 	if out.DefaultJSON == "" {
-		out.DefaultJSON = `{"cidade":"","uf":"","logradouro":"","bairro":""}`
+		out.DefaultJSON = `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`
 	}
 	if out.CacheTTL <= 0 {
 		out.CacheTTL = 48 * time.Hour

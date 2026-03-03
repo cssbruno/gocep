@@ -14,7 +14,7 @@ The library accepts both formats:
 ## Features
 - Parallel provider lookup with first-success response
 - Optional ordered fallback strategy with provider policy controls
-- Normalized CEP address output (`cidade`, `uf`, `logradouro`, `bairro`)
+- Normalized CEP address output (`cep`, `cidade`, `uf`, `logradouro`, `bairro`)
 - Isolated `cep.Client` API (per-client options, HTTP client, cache, endpoints, hooks)
 - Pluggable cache provider (user implementation)
 - CEP validation and normalization utilities
@@ -148,7 +148,7 @@ func (myCacheProvider) GetAny(key string) (any, bool) { return nil, false }
 
 func main() {
 	opts := cep.Options{
-		DefaultJSON:     `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
+		DefaultJSON:     `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`,
 		CacheEnabled:    true,
 		CacheTTL:        24 * time.Hour,
 		SearchTimeout:   5 * time.Second,
@@ -157,15 +157,15 @@ func main() {
 
 	httpClient := &http.Client{Timeout: 6 * time.Second}
 
-client := cep.NewClient(
-	cep.WithOptions(opts),
-	cep.WithHTTPClient(httpClient),
-	cep.WithCacheProvider(myCacheProvider{}),
-	cep.WithProviderPolicy(cep.ProviderPolicy{
-		Strategy:         cep.SearchStrategyOrderedFallback,
-		PreferredSources: []string{"brasilapi", "viacep"},
-	}),
-)
+	client := cep.NewClient(
+		cep.WithOptions(opts),
+		cep.WithHTTPClient(httpClient),
+		cep.WithCacheProvider(myCacheProvider{}),
+		cep.WithProviderPolicy(cep.ProviderPolicy{
+			Strategy:         cep.SearchStrategyOrderedFallback,
+			PreferredSources: []string{"brasilapi", "viacep"},
+		}),
+	)
 
 	result, address, err := client.SearchContext(context.Background(), "01001-000")
 	fmt.Println(result, address, err)
@@ -180,7 +180,7 @@ client := cep.NewClient(
 - `cep.NewClient(...)` and `client.SearchContext(...)`:
   isolated client configuration and lookups.
 - `cep.ValidCEP(models.CEPAddress) bool`:
-  validates normalized address completeness (`cidade`, `uf`, `logradouro`, `bairro`).
+  validates normalized address completeness (`cep`, `cidade`, `uf`, `logradouro`, `bairro`).
 - `cep.GetOptions()` / `cep.SetOptions(...)`:
   read/update options for the package default client.
 - `cep.SetHTTPClient(client *http.Client)`:

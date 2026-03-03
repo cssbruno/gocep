@@ -38,28 +38,28 @@ func TestSearch(t *testing.T) {
 		{
 			name:    "test_search_1",
 			args:    args{"08226024"},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
+			want:    `{"cep":"08226-024","cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
 			wantCep: true,
 			wantErr: nil,
 		},
 		{
 			name:    "test_search_2",
 			args:    args{"01001000"},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
+			want:    `{"cep":"01001-000","cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
 			wantCep: true,
 			wantErr: nil,
 		},
 		{
 			name:    "test_search_hyphenated_cep",
 			args:    args{"01001-000"},
-			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
+			want:    `{"cep":"01001-000","cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
 			wantCep: true,
 			wantErr: nil,
 		},
 		{
 			name:    "test_search_3",
 			args:    args{""},
-			want:    `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
+			want:    `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`,
 			wantCep: false,
 			wantErr: ErrInvalidCEP,
 		},
@@ -99,7 +99,7 @@ func TestValidCEP(t *testing.T) {
 	}{
 		{
 			name: "test_valid_cep_",
-			args: args{models.CEPAddress{City: "São Paulo", StateCode: "SP", Street: "Rua Esperança", Neighborhood: "Cidade Antônio Estevão de Carvalho"}},
+			args: args{models.CEPAddress{CEP: "08226-024", City: "São Paulo", StateCode: "SP", Street: "Rua Esperança", Neighborhood: "Cidade Antônio Estevão de Carvalho"}},
 			want: true,
 		},
 		{
@@ -125,7 +125,7 @@ func TestValidCEP(t *testing.T) {
 
 func BenchmarkSearchCacheHit(b *testing.B) {
 	SetOptions(Options{
-		DefaultJSON:     `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
+		DefaultJSON:     `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`,
 		CacheEnabled:    true,
 		CacheTTL:        48 * time.Hour,
 		SearchTimeout:   15 * time.Second,
@@ -135,8 +135,9 @@ func BenchmarkSearchCacheHit(b *testing.B) {
 	defer gocache.SetProvider(nil)
 
 	cep := "08226024"
-	payload := `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`
+	payload := `{"cep":"08226-024","cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`
 	address := models.CEPAddress{
+		CEP:          "08226-024",
 		City:         "São Paulo",
 		StateCode:    "SP",
 		Street:       "Rua Esperança",
@@ -161,8 +162,9 @@ func TestSearchTypedCacheHit(t *testing.T) {
 	useTestCacheProvider(t)
 
 	cepCode := "99999999"
-	expectedBody := `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua A","bairro":"Centro"}`
+	expectedBody := `{"cep":"99999-999","cidade":"São Paulo","uf":"SP","logradouro":"Rua A","bairro":"Centro"}`
 	expectedAddress := models.CEPAddress{
+		CEP:          "99999-999",
 		City:         "São Paulo",
 		StateCode:    "SP",
 		Street:       "Rua A",
@@ -201,10 +203,11 @@ func TestSearchStringCacheRehydratesTypedCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search() error = %v, want nil", err)
 	}
-	if gotBody != payload {
-		t.Fatalf("Search() body = %s, want %s", gotBody, payload)
+	wantBody := `{"cep":"88888-888","cidade":"Rio de Janeiro","uf":"RJ","logradouro":"Rua B","bairro":"Centro"}`
+	if gotBody != wantBody {
+		t.Fatalf("Search() body = %s, want %s", gotBody, wantBody)
 	}
-	if gotAddress.City != "Rio de Janeiro" || gotAddress.StateCode != "RJ" || gotAddress.Street != "Rua B" || gotAddress.Neighborhood != "Centro" {
+	if gotAddress.CEP != "88888-888" || gotAddress.City != "Rio de Janeiro" || gotAddress.StateCode != "RJ" || gotAddress.Street != "Rua B" || gotAddress.Neighborhood != "Centro" {
 		t.Fatalf("Search() address = %+v, unexpected", gotAddress)
 	}
 
@@ -361,11 +364,11 @@ func TestSearch_CorreioEndpointBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search() error = %v, want nil", err)
 	}
-	wantBody := `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
+	wantBody := `{"cep":"01001-000","cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
 	if gotBody != wantBody {
 		t.Fatalf("Search() body = %s, want %s", gotBody, wantBody)
 	}
-	if gotAddress.City != "São Paulo" || gotAddress.StateCode != "SP" || gotAddress.Street != "Praça da Sé" || gotAddress.Neighborhood != "Sé" {
+	if gotAddress.CEP != "01001-000" || gotAddress.City != "São Paulo" || gotAddress.StateCode != "SP" || gotAddress.Street != "Praça da Sé" || gotAddress.Neighborhood != "Sé" {
 		t.Fatalf("Search() address unexpected: %+v", gotAddress)
 	}
 }

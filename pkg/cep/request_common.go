@@ -61,7 +61,8 @@ func sendAddressResult(ctx context.Context, cancel context.CancelFunc, chResult 
 }
 
 func isCompleteAddress(address models.CEPAddress) bool {
-	return address.City != "" &&
+	return address.CEP != "" &&
+		address.City != "" &&
 		address.StateCode != "" &&
 		address.Street != "" &&
 		address.Neighborhood != ""

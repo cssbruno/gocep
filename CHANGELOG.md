@@ -19,6 +19,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 - `cep.Search` now returns typed errors for invalid CEP, timeout, and not-found outcomes.
 - Provider request errors are now surfaced in provider hook events.
+- Normalized address payload now includes `cep` (`cep`, `cidade`, `uf`, `logradouro`, `bairro`).
 
 ## [1.0.1] - 2026-03-02
 

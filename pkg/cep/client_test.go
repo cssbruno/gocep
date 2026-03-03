@@ -15,7 +15,7 @@ import (
 
 func testClientOptions() Options {
 	return Options{
-		DefaultJSON:     `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
+		DefaultJSON:     `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`,
 		CacheEnabled:    false,
 		CacheTTL:        time.Minute,
 		SearchTimeout:   2 * time.Second,
@@ -56,7 +56,7 @@ func TestClientSearchContextRespectsCallerDeadline(t *testing.T) {
 
 func TestClientProviderPolicyOrderedFallbackWithPerProviderTimeout(t *testing.T) {
 	const cepCode = "01001000"
-	const expectedBody = `{"cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Rapida","bairro":"Centro"}`
+	const expectedBody = `{"cep":"01001-000","cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Rapida","bairro":"Centro"}`
 
 	var slowCalls atomic.Int32
 	var fastCalls atomic.Int32
@@ -119,7 +119,7 @@ func TestClientProviderPolicyPreferredAndDisabled(t *testing.T) {
 	const cepCode = "02020020"
 	const viaBody = `{"cep":"02020-020","logradouro":"Rua Via","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`
 	const brBody = `{"cep":"02020-020","state":"SP","city":"Sao Paulo","neighborhood":"Centro","street":"Rua Brasil"}`
-	const expectedPreferred = `{"cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Brasil","bairro":"Centro"}`
+	const expectedPreferred = `{"cep":"02020-020","cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Brasil","bairro":"Centro"}`
 
 	var viaCalls atomic.Int32
 	var brCalls atomic.Int32
@@ -233,6 +233,7 @@ func TestClientHooksCacheAndProviderEvents(t *testing.T) {
 	_ = cache.SetAnyTTL(cepCode, cachedResult{
 		JSON: `{"cidade":"Rio de Janeiro","uf":"RJ","logradouro":"Rua B","bairro":"Centro"}`,
 		Address: models.CEPAddress{
+			CEP:          "88888-888",
 			City:         "Rio de Janeiro",
 			StateCode:    "RJ",
 			Street:       "Rua B",

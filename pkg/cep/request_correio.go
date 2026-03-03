@@ -40,6 +40,7 @@ func requestCorreio(ctx context.Context, cancel context.CancelFunc, cep, method,
 	if err == nil {
 		c := correio.Body.LookupCEPResponse.Return
 		address := models.CEPAddress{
+			CEP:          formattedCEPOrRaw(cep),
 			City:         c.City,
 			StateCode:    c.StateCode,
 			Street:       c.Address,

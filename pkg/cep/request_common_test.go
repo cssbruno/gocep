@@ -181,6 +181,7 @@ func TestSendAddressResult_SendsAndCancels(t *testing.T) {
 	calledCancel := false
 	chResult := make(chan Result, 1)
 	address := models.CEPAddress{
+		CEP:          "01001-000",
 		City:         "Sao Paulo",
 		StateCode:    "SP",
 		Street:       "Street",
@@ -210,6 +211,7 @@ func TestSendAddressResult_ContextDoneNoSend(t *testing.T) {
 	calledCancel := false
 	chResult := make(chan Result)
 	address := models.CEPAddress{
+		CEP:          "01001-000",
 		City:         "Sao Paulo",
 		StateCode:    "SP",
 		Street:       "Street",
@@ -242,6 +244,7 @@ func TestSendAddressResult_MarshalErrorNoSend(t *testing.T) {
 	calledCancel := false
 	chResult := make(chan Result, 1)
 	address := models.CEPAddress{
+		CEP:          "01001-000",
 		City:         "Sao Paulo",
 		StateCode:    "SP",
 		Street:       "Street",

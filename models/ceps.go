@@ -6,6 +6,7 @@ import (
 
 // CEPAddress is the normalized address response used by this project.
 type CEPAddress struct {
+	CEP          string `json:"cep"`
 	City         string `json:"cidade"`
 	StateCode    string `json:"uf"`
 	Street       string `json:"logradouro"`
