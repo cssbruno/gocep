@@ -61,7 +61,7 @@ jobs:
 
             bin="gocep_${goos}_${goarch}${ext}"
             CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-              go build -trimpath -ldflags="-s -w" -o "dist/${bin}" .
+              go build -trimpath -ldflags="-s -w" -o "dist/${bin}" ./cmd/gocep-server
 
             if [ "$goos" = "windows" ]; then
               (

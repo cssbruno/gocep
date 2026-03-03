@@ -10,7 +10,7 @@ GOPRIVATE=github.com/cssbruno/gocep
 
 build:
 	@echo "########## Building API ..."
-	go build -ldflags="-s -w" -o gocep main.go
+	go build -ldflags="-s -w" -o gocep ./cmd/gocep-server
 	#upx gocep
 	@echo "build completed"
 	@echo "\033[0;33m################ run #####################\033[0m"
@@ -25,7 +25,7 @@ update:
 
 compose:
 	@echo "########## Running deployment script ..."
-	sh deploy.gocep.sh
+	sh deploy/docker/deploy.sh
 	@echo "done"
 
 test: 

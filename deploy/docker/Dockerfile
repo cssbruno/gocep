@@ -2,7 +2,7 @@ FROM golang:alpine AS builder
 WORKDIR /go/src/gocep
 COPY . .
 ENV GO111MODULE=on
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o gocep main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o gocep ./cmd/gocep-server
 RUN cp gocep /go/bin/gocep
 
 FROM scratch

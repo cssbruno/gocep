@@ -10,10 +10,10 @@ It is the Brazilian postal code, similar to a ZIP code in the US.
 This API accepts both formats: `00000-000` (for example `01001-000`) and `00000000` (for example `01001000`).
 
 ## Why This Project
+- Reusable Go package: [`pkg/cep`](pkg/cep)
 - Concurrent lookup across multiple providers
 - In-memory cache for repeated CEP queries
 - REST endpoint: `GET /v1/cep/{cep}`
-- Reusable Go package: [`pkg/cep`](pkg/cep)
 - Deterministic JSON error contract
 
 ## Language Standardization
@@ -26,11 +26,34 @@ Original project and base implementation by **Jeffotoni**:
 - GitHub: https://github.com/jeffotoni
 - Repository: https://github.com/jeffotoni/gocep
 
-## Quick Start
+## Quick Start (Go Library First)
+### Use as a Go library
+```bash
+go get github.com/cssbruno/gocep@latest
+```
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/cssbruno/gocep/pkg/cep"
+)
+
+func main() {
+	resultJSON, normalized, err := cep.Search("01001000")
+	fmt.Println("error:", err)
+	fmt.Println("json:", resultJSON)
+	fmt.Println("address:", normalized)
+}
+```
+
+### Run HTTP server (optional)
 ```bash
 git clone https://github.com/cssbruno/gocep.git
 cd gocep
-go run .
+go run ./cmd/gocep-server
 ```
 
 Default server address: `0.0.0.0:8080`
@@ -40,15 +63,17 @@ Default server address: `0.0.0.0:8080`
 curl -i http://localhost:8080/v1/cep/01001000
 ```
 
-## Docker
+### Docker (optional, low priority)
 ```bash
 docker run --name gocep --rm -p 8080:8080 cssbruno/gocep:latest
 ```
 
-Or:
+Or run the local Docker example:
 ```bash
 make compose
 ```
+
+Docker assets are now grouped in [`deploy/docker/`](deploy/docker/).
 
 ## HTTP API
 ### Main route
@@ -89,24 +114,6 @@ Returned when the CEP format is valid, but no provider returned a complete addre
 Notes:
 - `200` and `204` are successful outcomes and do not include an `error.code`.
 - `302 invalid_endpoint` is kept for backward compatibility with current behavior.
-
-## Go Library Usage
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/cssbruno/gocep/pkg/cep"
-)
-
-func main() {
-	resultJSON, normalized, err := cep.Search("01001000")
-	fmt.Println("error:", err)
-	fmt.Println("json:", resultJSON)
-	fmt.Println("address:", normalized)
-}
-```
 
 ## Current Providers
 Configured in [`models/endpoints.go`](models/endpoints.go):
@@ -154,6 +161,8 @@ Examples in [`examples/`](examples/):
 - `rust`
 - `c`
 - `c++`
+
+Deployment/container files are in [`deploy/docker/`](deploy/docker/).
 
 ## Development
 ```bash
