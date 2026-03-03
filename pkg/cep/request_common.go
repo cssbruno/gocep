@@ -3,12 +3,17 @@ package cep
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/cssbruno/gocep/models"
 )
 
 func executeRequest(req *http.Request) (*http.Response, bool) {
-	response, err := httpClient.Do(req)
+	if req == nil || req.URL == nil || !strings.EqualFold(req.URL.Scheme, "https") {
+		return nil, false
+	}
+
+	response, err := getHTTPClient().Do(req)
 	if err != nil {
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()

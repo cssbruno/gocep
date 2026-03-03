@@ -14,7 +14,7 @@ The library accepts both formats:
 ## Features
 - Parallel provider lookup with first-success response
 - Normalized CEP address output (`cidade`, `uf`, `logradouro`, `bairro`)
-- Built-in caching (`memory` or `redis`)
+- Pluggable cache provider (user implementation)
 - CEP validation and normalization utilities
 - Stable API for direct library integration
 
@@ -72,31 +72,44 @@ Configured in [`models/endpoints.go`](models/endpoints.go):
 - OpenCEP
 - AwesomeAPI CEP
 
+To override providers at runtime, prefer `models.SetEndpoints(...)`.
+
 ## Configuration
-Main environment variables from [`config/config.go`](config/config.go):
-- `CACHE_ENABLE` (default: `true`)
-- `CACHE_BACKEND` (`memory` or `redis`, default: `memory`)
-- `TTL_CACHE` seconds (default: `172800`)
-- `TIMEOUT_SEARCH_CEP` seconds (default: `15`)
-- `TIMEOUT` seconds (default: `30`)
-- `MAX_PROVIDER_BODY` bytes (default: `1048576`)
-- `INSECURE_SKIP_VERIFY` (default: `false`)
-- `REDIS_ADDR` (default: `127.0.0.1:6379`)
-- `REDIS_USER`
-- `REDIS_PASSWORD`
-- `REDIS_DB` (default: `0`)
-- `REDIS_PREFIX` (default: `gocep:`)
+The library is configured in code through [`pkg/cep/options.go`](pkg/cep/options.go).
+
+Example:
+```go
+import (
+	"time"
+
+	"github.com/cssbruno/gocep/pkg/cep"
+)
+
+opts := cep.GetOptions()
+opts.CacheEnabled = true
+opts.SearchTimeout = 10 * time.Second
+opts.CacheTTL = 24 * time.Hour
+cep.SetOptions(opts)
+
+// Optional: provide your own cache implementation.
+type myCacheProvider struct{}
+
+func (myCacheProvider) SetAnyTTL(key string, value any, ttl time.Duration) bool { return true }
+func (myCacheProvider) GetAny(key string) (any, bool) { return nil, false }
+
+cep.SetCacheProvider(myCacheProvider{})
+```
+
+Main options:
+- `cep.Options.CacheEnabled`
+- `cep.Options.CacheTTL`
+- `cep.Options.SearchTimeout`
+- `cep.Options.MaxProviderBody`
 
 ## Examples
 Examples in [`examples/`](examples/):
-- `go` (lib/client)
-- `nodejs`
-- `javascript`
-- `python`
-- `php`
-- `rust`
-- `c`
-- `c++`
+- `go/lib`
+- `go/client`
 
 ## Development
 ```bash

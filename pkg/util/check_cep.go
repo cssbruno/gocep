@@ -66,8 +66,3 @@ func FormatCEP(cep string) (string, error) {
 	}
 	return normalized[:5] + "-" + normalized[5:], nil
 }
-
-// Deprecated: use CheckCEP.
-func CheckCep(cep string) error {
-	return CheckCEP(cep)
-}

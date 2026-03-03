@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/models"
 	"github.com/cssbruno/gocep/service/gocache"
 )
@@ -17,7 +16,7 @@ func TestSearchIgnoresInvalidStringCacheAndUsesProviderResult(t *testing.T) {
 	const cepCode = "77777777"
 	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
 
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/"+cepCode {
 			t.Fatalf("provider path = %s, want /%s", r.URL.Path, cepCode)
 		}
@@ -25,19 +24,15 @@ func TestSearchIgnoresInvalidStringCacheAndUsesProviderResult(t *testing.T) {
 		_, _ = w.Write([]byte(`{"cep":"77777-777","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
 	}))
 	defer provider.Close()
+	useServerHTTPClient(t, provider)
+	useTestCacheProvider(t)
 
-	oldEndpoints := models.Endpoints
-	models.Endpoints = []models.Endpoint{
+	useTestEndpoints(t, []models.Endpoint{
 		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/%s"},
-	}
-	t.Cleanup(func() {
-		models.Endpoints = oldEndpoints
 	})
 
-	oldCacheEnabled := config.CacheEnabled
-	config.CacheEnabled = true
-	t.Cleanup(func() {
-		config.CacheEnabled = oldCacheEnabled
+	useTestOptions(t, func(o *Options) {
+		o.CacheEnabled = true
 	})
 
 	// Seed cache with invalid JSON string to simulate old/bad cached payload.
@@ -62,34 +57,31 @@ func TestSearchIntegrationFallbackAcrossHTTPProviders(t *testing.T) {
 	const expectedBody = `{"cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Fallback","bairro":"Centro"}`
 
 	var failCalls atomic.Int32
-	failProvider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		failCalls.Add(1)
-		w.WriteHeader(http.StatusBadGateway)
-		_, _ = w.Write([]byte(`{"error":"upstream"}`))
-	}))
-	defer failProvider.Close()
-
 	var successCalls atomic.Int32
-	successProvider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		successCalls.Add(1)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Rua Fallback","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`))
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/fail/"+cepCode:
+			failCalls.Add(1)
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"error":"upstream"}`))
+		case r.URL.Path == "/success/"+cepCode:
+			successCalls.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Rua Fallback","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}))
-	defer successProvider.Close()
+	defer provider.Close()
+	useServerHTTPClient(t, provider)
 
-	oldEndpoints := models.Endpoints
-	models.Endpoints = []models.Endpoint{
-		{Method: models.MethodGet, Source: models.SourceViaCep, URL: failProvider.URL + "/%s"},
-		{Method: models.MethodGet, Source: models.SourceViaCep, URL: successProvider.URL + "/%s"},
-	}
-	t.Cleanup(func() {
-		models.Endpoints = oldEndpoints
+	useTestEndpoints(t, []models.Endpoint{
+		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/fail/%s"},
+		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/success/%s"},
 	})
 
-	oldCacheEnabled := config.CacheEnabled
-	config.CacheEnabled = false
-	t.Cleanup(func() {
-		config.CacheEnabled = oldCacheEnabled
+	useTestOptions(t, func(o *Options) {
+		o.CacheEnabled = false
 	})
 
 	gotBody, gotAddress, err := Search(cepCode)
@@ -115,42 +107,39 @@ func TestSearchIntegrationFallbackFromCorreioToViaCEP(t *testing.T) {
 	const expectedBody = `{"cidade":"Sao Paulo","uf":"SP","logradouro":"Rua ViaCEP","bairro":"Centro"}`
 
 	var correioCalls atomic.Int32
-	correioProvider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		correioCalls.Add(1)
-		if r.Method != http.MethodPost {
-			t.Fatalf("correio method = %s, want %s", r.Method, http.MethodPost)
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`invalid-xml`))
-	}))
-	defer correioProvider.Close()
-
 	var viaCalls atomic.Int32
-	viaProvider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		viaCalls.Add(1)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Rua ViaCEP","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`))
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/correio":
+			correioCalls.Add(1)
+			if r.Method != http.MethodPost {
+				t.Fatalf("correio method = %s, want %s", r.Method, http.MethodPost)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`invalid-xml`))
+		case r.URL.Path == "/viacep/"+cepCode:
+			viaCalls.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Rua ViaCEP","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}))
-	defer viaProvider.Close()
+	defer provider.Close()
+	useServerHTTPClient(t, provider)
 
-	oldEndpoints := models.Endpoints
-	models.Endpoints = []models.Endpoint{
+	useTestEndpoints(t, []models.Endpoint{
 		{
 			Method: models.MethodPost,
 			Source: models.SourceCorreio,
-			URL:    correioProvider.URL,
+			URL:    provider.URL + "/correio",
 			Body:   models.PayloadCorreio,
 		},
-		{Method: models.MethodGet, Source: models.SourceViaCep, URL: viaProvider.URL + "/%s"},
-	}
-	t.Cleanup(func() {
-		models.Endpoints = oldEndpoints
+		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/viacep/%s"},
 	})
 
-	oldCacheEnabled := config.CacheEnabled
-	config.CacheEnabled = false
-	t.Cleanup(func() {
-		config.CacheEnabled = oldCacheEnabled
+	useTestOptions(t, func(o *Options) {
+		o.CacheEnabled = false
 	})
 
 	gotBody, gotAddress, err := Search(cepCode)
@@ -176,25 +165,21 @@ func TestSearchIgnoresIncompleteStringCacheAndUsesProviderResult(t *testing.T) {
 	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Completa","bairro":"Centro"}`
 
 	var calls atomic.Int32
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"cep":"66666-666","logradouro":"Rua Completa","bairro":"Centro","localidade":"São Paulo","uf":"SP"}`))
 	}))
 	defer provider.Close()
+	useServerHTTPClient(t, provider)
+	useTestCacheProvider(t)
 
-	oldEndpoints := models.Endpoints
-	models.Endpoints = []models.Endpoint{
+	useTestEndpoints(t, []models.Endpoint{
 		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/%s"},
-	}
-	t.Cleanup(func() {
-		models.Endpoints = oldEndpoints
 	})
 
-	oldCacheEnabled := config.CacheEnabled
-	config.CacheEnabled = true
-	t.Cleanup(func() {
-		config.CacheEnabled = oldCacheEnabled
+	useTestOptions(t, func(o *Options) {
+		o.CacheEnabled = true
 	})
 
 	// Incomplete payload must not be treated as a valid cache hit.
@@ -222,26 +207,21 @@ func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
 	const expectedBody = `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Dedupe","bairro":"Centro"}`
 
 	var calls atomic.Int32
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		time.Sleep(50 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"cep":"02020-020","logradouro":"Rua Dedupe","bairro":"Centro","localidade":"São Paulo","uf":"SP"}`))
 	}))
 	defer provider.Close()
+	useServerHTTPClient(t, provider)
 
-	oldEndpoints := models.Endpoints
-	models.Endpoints = []models.Endpoint{
+	useTestEndpoints(t, []models.Endpoint{
 		{Method: models.MethodGet, Source: models.SourceViaCep, URL: provider.URL + "/%s"},
-	}
-	t.Cleanup(func() {
-		models.Endpoints = oldEndpoints
 	})
 
-	oldCacheEnabled := config.CacheEnabled
-	config.CacheEnabled = false
-	t.Cleanup(func() {
-		config.CacheEnabled = oldCacheEnabled
+	useTestOptions(t, func(o *Options) {
+		o.CacheEnabled = false
 	})
 
 	const workers = 20

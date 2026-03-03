@@ -189,14 +189,3 @@ func TestParseCEPAddress(t *testing.T) {
 		})
 	}
 }
-
-func TestParseWeCepDeprecatedAlias(t *testing.T) {
-	body := []byte(`{"cep":"01001-000","logradouro":"Praça da Sé","localidade":"São Paulo","uf":"SP","bairro":"Sé"}`)
-	got, err := ParseWeCep(models.SourceViaCep, body)
-	if err != nil {
-		t.Fatalf("ParseWeCep() error = %v, want nil", err)
-	}
-	if got.City != "São Paulo" || got.StateCode != "SP" || got.Street != "Praça da Sé" || got.Neighborhood != "Sé" {
-		t.Fatalf("ParseWeCep() got unexpected value: %+v", got)
-	}
-}

@@ -129,17 +129,17 @@ func TestRequestProvider(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotPath atomic.Value
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotPath.Store(r.URL.Path)
 				w.WriteHeader(tt.statusCode)
 				_, _ = w.Write([]byte(tt.responseBody))
 			}))
 			defer server.Close()
 
-			oldClient := httpClient
-			httpClient = server.Client()
+			oldClient := getHTTPClient()
+			SetHTTPClient(server.Client())
 			t.Cleanup(func() {
-				httpClient = oldClient
+				SetHTTPClient(oldClient)
 			})
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -201,36 +201,6 @@ func TestAddHyphen(t *testing.T) {
 	}
 }
 
-func TestNewRequestWithContextDeprecatedAlias(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
-	}))
-	defer server.Close()
-
-	oldClient := httpClient
-	httpClient = server.Client()
-	t.Cleanup(func() {
-		httpClient = oldClient
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	chResult := make(chan Result, 1)
-
-	go NewRequestWithContext(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, server.URL+"/%s", chResult)
-
-	select {
-	case got := <-chResult:
-		want := `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
-		if string(got.Body) != want {
-			t.Fatalf("NewRequestWithContext() body = %s, want %s", string(got.Body), want)
-		}
-	case <-time.After(time.Second):
-		t.Fatalf("NewRequestWithContext() timeout")
-	}
-}
-
 func TestRequestProvider_RequestBuildError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -257,8 +227,8 @@ func (errReader) Read([]byte) (int, error) { return 0, errors.New("read error") 
 func (errReader) Close() error             { return nil }
 
 func TestRequestProvider_ReadBodyError(t *testing.T) {
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -267,15 +237,15 @@ func TestRequestProvider_ReadBodyError(t *testing.T) {
 				Request:    r,
 			}, nil
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	chResult := make(chan Result, 1)
-	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "http://example.com/%s", chResult)
+	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "https://example.com/%s", chResult)
 
 	select {
 	case got := <-chResult:
@@ -285,16 +255,16 @@ func TestRequestProvider_ReadBodyError(t *testing.T) {
 }
 
 func TestRequestProvider_ContextDoneBranch(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
 	}))
 	defer server.Close()
 
-	oldClient := httpClient
-	httpClient = server.Client()
+	oldClient := getHTTPClient()
+	SetHTTPClient(server.Client())
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -311,16 +281,16 @@ func TestRequestProvider_ContextDoneBranch(t *testing.T) {
 }
 
 func TestRequestProvider_UnknownSourceNoResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"any":"thing"}`)
 	}))
 	defer server.Close()
 
-	oldClient := httpClient
-	httpClient = server.Client()
+	oldClient := getHTTPClient()
+	SetHTTPClient(server.Client())
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -336,20 +306,20 @@ func TestRequestProvider_UnknownSourceNoResult(t *testing.T) {
 }
 
 func TestRequestProvider_NilResponseNoResult(t *testing.T) {
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return nil, nil
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	chResult := make(chan Result, 1)
-	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "http://example.com/%s", chResult)
+	requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "https://example.com/%s", chResult)
 
 	select {
 	case got := <-chResult:
@@ -359,15 +329,15 @@ func TestRequestProvider_NilResponseNoResult(t *testing.T) {
 }
 
 func TestRequestProvider_EmptyBodyNoResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	oldClient := httpClient
-	httpClient = server.Client()
+	oldClient := getHTTPClient()
+	SetHTTPClient(server.Client())
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -383,16 +353,16 @@ func TestRequestProvider_EmptyBodyNoResult(t *testing.T) {
 }
 
 func TestRequestProvider_MarshalErrorNoResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`))
 	}))
 	defer server.Close()
 
-	oldClient := httpClient
-	httpClient = server.Client()
+	oldClient := getHTTPClient()
+	SetHTTPClient(server.Client())
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	oldMarshal := marshalAddressJSON

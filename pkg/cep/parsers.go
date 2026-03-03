@@ -106,8 +106,3 @@ func buildAddress(city, stateCode, street, neighborhood string) models.CEPAddres
 		Neighborhood: neighborhood,
 	}
 }
-
-// Deprecated: use ParseCEPAddress.
-func ParseWeCep(source string, body []byte) (models.CEPAddress, error) {
-	return ParseCEPAddress(source, body)
-}

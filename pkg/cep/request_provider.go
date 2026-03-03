@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/models"
 )
 
@@ -31,7 +30,7 @@ func requestProvider(ctx context.Context, cancel context.CancelFunc, cep, source
 	}
 	defer response.Body.Close()
 
-	maxBody := config.MaxProviderBody
+	maxBody := GetOptions().MaxProviderBody
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxBody+1))
 	if err != nil {
 		return
@@ -50,12 +49,6 @@ func requestProvider(ctx context.Context, cancel context.CancelFunc, cep, source
 	}
 
 	sendAddressResult(ctx, cancel, chResult, address)
-}
-
-// Deprecated: use Search.
-func NewRequestWithContext(ctx context.Context, cancel context.CancelFunc, cep, source, method,
-	endpoint string, chResult chan<- Result) {
-	requestProvider(ctx, cancel, cep, source, method, endpoint, chResult)
 }
 
 func addHyphen(s string) string {

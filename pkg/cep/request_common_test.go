@@ -23,17 +23,17 @@ func (c *closeTracker) Close() error {
 }
 
 func TestExecuteRequest_ErrorReturnsFalse(t *testing.T) {
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return nil, errors.New("forced do error")
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
-	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
 	}
@@ -49,8 +49,8 @@ func TestExecuteRequest_ErrorReturnsFalse(t *testing.T) {
 
 func TestExecuteRequest_Non200ClosesBody(t *testing.T) {
 	tracker := &closeTracker{}
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusBadGateway,
@@ -59,12 +59,12 @@ func TestExecuteRequest_Non200ClosesBody(t *testing.T) {
 				Request:    r,
 			}, nil
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
-	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
 	}
@@ -82,8 +82,8 @@ func TestExecuteRequest_Non200ClosesBody(t *testing.T) {
 }
 
 func TestExecuteRequest_Success(t *testing.T) {
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -92,12 +92,12 @@ func TestExecuteRequest_Success(t *testing.T) {
 				Request:    r,
 			}, nil
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
-	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
 	}
@@ -112,19 +112,46 @@ func TestExecuteRequest_Success(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
+func TestExecuteRequest_NonTLSURLRejected(t *testing.T) {
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			t.Fatalf("transport should not be called for non-TLS URL")
+			return nil, nil
+		}),
+	})
+	t.Cleanup(func() {
+		SetHTTPClient(oldClient)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	resp, ok := executeRequest(req)
+	if ok {
+		t.Fatalf("executeRequest() ok = true, want false")
+	}
+	if resp != nil {
+		t.Fatalf("executeRequest() response = %v, want nil", resp)
+	}
+}
+
 func TestExecuteRequest_RedirectErrorReturnsFalse(t *testing.T) {
-	redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "http://example.com/next", http.StatusFound)
+	redirectServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://example.com/next", http.StatusFound)
 	}))
 	defer redirectServer.Close()
 
-	oldClient := httpClient
-	httpClient = redirectServer.Client()
-	httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+	oldClient := getHTTPClient()
+	client := redirectServer.Client()
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return errors.New("stop redirect")
 	}
+	SetHTTPClient(client)
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	req, err := http.NewRequest(http.MethodGet, redirectServer.URL, nil)

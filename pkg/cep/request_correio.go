@@ -1,21 +1,19 @@
 package cep
 
 import (
-	"bytes"
 	"context"
 	"encoding/xml"
 	"io"
 	"net/http"
 	"strings"
 
-	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/models"
 )
 
 // requestCorreio performs concurrent lookups against Correio SOAP API.
 func requestCorreio(ctx context.Context, cancel context.CancelFunc, cep, method, endpoint, payload string, chResult chan<- Result) {
 	payload = strings.Replace(payload, "%s", cep, 1)
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader([]byte(payload)))
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, strings.NewReader(payload))
 	if err != nil {
 		return
 	}
@@ -28,7 +26,7 @@ func requestCorreio(ctx context.Context, cancel context.CancelFunc, cep, method,
 	}
 	defer response.Body.Close()
 
-	maxBody := config.MaxProviderBody
+	maxBody := GetOptions().MaxProviderBody
 	rawBody, err := io.ReadAll(io.LimitReader(response.Body, maxBody+1))
 	if err != nil {
 		return
@@ -49,10 +47,4 @@ func requestCorreio(ctx context.Context, cancel context.CancelFunc, cep, method,
 		}
 		sendAddressResult(ctx, cancel, chResult, address)
 	}
-}
-
-// Deprecated: use Search.
-func NewRequestWithContextCorreio(ctx context.Context, cancel context.CancelFunc, cep, source, method, endpoint, payload string, chResult chan<- Result) {
-	_ = source
-	requestCorreio(ctx, cancel, cep, method, endpoint, payload, chResult)
 }

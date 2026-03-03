@@ -1,5 +1,7 @@
 package models
 
+import "sync"
+
 type Endpoint struct {
 	Method string
 	Source string
@@ -39,14 +41,41 @@ const (
 </x:Envelope>`
 )
 
-var Endpoints = []Endpoint{
-	{Method: MethodGet, Source: SourceCdnApiCep, URL: URLCdnApiCep},
-	{Method: MethodGet, Source: SourceGitHubJeffotoni, URL: URLGitHubJeffotoni},
-	{Method: MethodGet, Source: SourceViaCep, URL: URLViaCep},
-	{Method: MethodGet, Source: SourcePostmon, URL: URLPostmon},
-	{Method: MethodGet, Source: SourceRepublicaVirtual, URL: URLRepublicaVirtual},
-	{Method: MethodPost, Source: SourceCorreio, URL: URLCorreiosService, Body: PayloadCorreio},
-	{Method: MethodGet, Source: SourceBrasilAPI, URL: URLBrasilAPI},
-	{Method: MethodGet, Source: SourceOpenCEP, URL: URLOpenCEP},
-	{Method: MethodGet, Source: SourceAwesomeAPI, URL: URLAwesomeAPI},
+var (
+	endpointsMu sync.RWMutex
+
+	// Endpoints contains provider configurations used by CEP search.
+	// Prefer SetEndpoints/GetEndpoints for concurrent-safe updates.
+	Endpoints = []Endpoint{
+		{Method: MethodGet, Source: SourceCdnApiCep, URL: URLCdnApiCep},
+		{Method: MethodGet, Source: SourceGitHubJeffotoni, URL: URLGitHubJeffotoni},
+		{Method: MethodGet, Source: SourceViaCep, URL: URLViaCep},
+		{Method: MethodGet, Source: SourcePostmon, URL: URLPostmon},
+		{Method: MethodGet, Source: SourceRepublicaVirtual, URL: URLRepublicaVirtual},
+		{Method: MethodPost, Source: SourceCorreio, URL: URLCorreiosService, Body: PayloadCorreio},
+		{Method: MethodGet, Source: SourceBrasilAPI, URL: URLBrasilAPI},
+		{Method: MethodGet, Source: SourceOpenCEP, URL: URLOpenCEP},
+		{Method: MethodGet, Source: SourceAwesomeAPI, URL: URLAwesomeAPI},
+	}
+)
+
+func GetEndpoints() []Endpoint {
+	endpointsMu.RLock()
+	defer endpointsMu.RUnlock()
+	return cloneEndpoints(Endpoints)
+}
+
+func SetEndpoints(next []Endpoint) {
+	endpointsMu.Lock()
+	Endpoints = cloneEndpoints(next)
+	endpointsMu.Unlock()
+}
+
+func cloneEndpoints(in []Endpoint) []Endpoint {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]Endpoint, len(in))
+	copy(out, in)
+	return out
 }

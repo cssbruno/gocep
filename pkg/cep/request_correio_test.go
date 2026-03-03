@@ -57,7 +57,7 @@ func TestRequestCorreio(t *testing.T) {
 
 			endpoint := tt.endpoint
 			if tt.useServer {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					gotMethod.Store(r.Method)
 					gotContentType.Store(r.Header.Get("Content-type"))
 					w.WriteHeader(http.StatusOK)
@@ -66,10 +66,10 @@ func TestRequestCorreio(t *testing.T) {
 				defer server.Close()
 				endpoint = server.URL
 
-				oldClient := httpClient
-				httpClient = server.Client()
+				oldClient := getHTTPClient()
+				SetHTTPClient(server.Client())
 				t.Cleanup(func() {
-					httpClient = oldClient
+					SetHTTPClient(oldClient)
 				})
 			}
 
@@ -111,16 +111,16 @@ func TestRequestCorreio(t *testing.T) {
 }
 
 func TestRequestCorreio_Non200NoResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = io.WriteString(w, `upstream error`)
 	}))
 	defer server.Close()
 
-	oldClient := httpClient
-	httpClient = server.Client()
+	oldClient := getHTTPClient()
+	SetHTTPClient(server.Client())
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -135,50 +135,21 @@ func TestRequestCorreio_Non200NoResult(t *testing.T) {
 	}
 }
 
-func TestNewRequestWithContextCorreioDeprecatedAlias(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `<Envelope><Body><consultaCEPResponse><return><bairro>Sé</bairro><cidade>São Paulo</cidade><end>Praça da Sé</end><uf>SP</uf></return></consultaCEPResponse></Body></Envelope>`)
-	}))
-	defer server.Close()
-
-	oldClient := httpClient
-	httpClient = server.Client()
-	t.Cleanup(func() {
-		httpClient = oldClient
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	chResult := make(chan Result, 1)
-	go NewRequestWithContextCorreio(ctx, cancel, "01001000", "ignored", http.MethodPost, server.URL, correioPayloadTemplate, chResult)
-
-	select {
-	case got := <-chResult:
-		want := `{"cidade":"São Paulo","uf":"SP","logradouro":"Praça da Sé","bairro":"Sé"}`
-		if string(got.Body) != want {
-			t.Fatalf("NewRequestWithContextCorreio() = %s, want %s", string(got.Body), want)
-		}
-	case <-time.After(time.Second):
-		t.Fatalf("NewRequestWithContextCorreio() timeout")
-	}
-}
-
 func TestRequestCorreio_DoErrorNoResult(t *testing.T) {
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return nil, errors.New("forced do error")
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	chResult := make(chan Result, 1)
-	requestCorreio(ctx, cancel, "01001000", http.MethodPost, "http://example.com", correioPayloadTemplate, chResult)
+	requestCorreio(ctx, cancel, "01001000", http.MethodPost, "https://example.com", correioPayloadTemplate, chResult)
 
 	select {
 	case got := <-chResult:
@@ -188,20 +159,20 @@ func TestRequestCorreio_DoErrorNoResult(t *testing.T) {
 }
 
 func TestRequestCorreio_NilResponseNoResult(t *testing.T) {
-	oldClient := httpClient
-	httpClient = &http.Client{
+	oldClient := getHTTPClient()
+	SetHTTPClient(&http.Client{
 		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
 			return nil, nil
 		}),
-	}
+	})
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	chResult := make(chan Result, 1)
-	requestCorreio(ctx, cancel, "01001000", http.MethodPost, "http://example.com", correioPayloadTemplate, chResult)
+	requestCorreio(ctx, cancel, "01001000", http.MethodPost, "https://example.com", correioPayloadTemplate, chResult)
 
 	select {
 	case got := <-chResult:
@@ -211,16 +182,16 @@ func TestRequestCorreio_NilResponseNoResult(t *testing.T) {
 }
 
 func TestRequestCorreio_MarshalErrorNoResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `<Envelope><Body><consultaCEPResponse><return><bairro>Sé</bairro><cidade>São Paulo</cidade><end>Praça da Sé</end><uf>SP</uf></return></consultaCEPResponse></Body></Envelope>`)
 	}))
 	defer server.Close()
 
-	oldClient := httpClient
-	httpClient = server.Client()
+	oldClient := getHTTPClient()
+	SetHTTPClient(server.Client())
 	t.Cleanup(func() {
-		httpClient = oldClient
+		SetHTTPClient(oldClient)
 	})
 
 	oldMarshal := marshalAddressJSON

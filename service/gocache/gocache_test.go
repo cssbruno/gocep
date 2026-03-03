@@ -1,160 +1,84 @@
 package gocache
 
 import (
+	"sync"
 	"testing"
 	"time"
-
-	"github.com/cssbruno/gocep/config"
 )
 
-// go test -run ^TestRun'$ -v
-func TestRun(t *testing.T) {
+func TestSetAnyTTL_WithoutProvider(t *testing.T) {
 	resetCacheForTests()
 
-	got := Run()
-	if got == nil {
-		t.Fatalf("Run() = nil, want non-nil")
+	if ok := SetAnyTTL("key", "value", time.Second); ok {
+		t.Fatalf("SetAnyTTL() = true, want false when no provider is configured")
 	}
-
-	got2 := Run()
-	if got != got2 {
-		t.Fatalf("Run() should be idempotent and return same cache instance")
+	if got, found := GetAny("key"); found || got != nil {
+		t.Fatalf("GetAny() = (%v,%v), want (nil,false) when no provider is configured", got, found)
 	}
 }
 
-// go test -run ^TestSetTTL'$ -v
 func TestSetTTL(t *testing.T) {
 	resetCacheForTests()
-	TestRun(t)
-	type args struct {
-		key   string
-		value string
-		ttl   time.Duration
+	SetProvider(&mockProvider{})
+
+	if ok := SetTTL("08226021", `{"cidade":"São Paulo","uf":"SP"}`, 5*time.Second); !ok {
+		t.Fatalf("SetTTL() = false, want true")
 	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{
-			name: "test_setTTL_",
-			args: args{
-				key:   `08226021`,
-				value: `{"cidade":"São Paulo","uf":"SP","logradouro":"18 de Abril","bairro":"Cidade Antônio Estevão de Carvalho"}`,
-				ttl:   time.Duration(5) * time.Second,
-			},
-			want: true,
-		},
-		{
-			name: "test_setTTL_",
-			args: args{
-				key:   ``,
-				value: `{"cidade":"São Paulo","uf":"SP","logradouro":"18 de Abril","bairro":"Cidade Antônio Estevão de Carvalho"}`,
-				ttl:   time.Duration(5) * time.Second,
-			},
-			want: false,
-		},
-		{
-			name: "test_setTTL_",
-			args: args{
-				key:   `08226021`,
-				value: ``,
-				ttl:   time.Duration(5) * time.Second,
-			},
-			want: false,
-		},
-		{
-			name: "test_setTTL_",
-			args: args{
-				key:   ``,
-				value: ``,
-				ttl:   time.Duration(5) * time.Second,
-			},
-			want: false,
-		},
+	if ok := SetTTL("", "value", 5*time.Second); ok {
+		t.Fatalf("SetTTL() with empty key = true, want false")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := SetTTL(tt.args.key, tt.args.value, tt.args.ttl); got != tt.want {
-				t.Errorf("SetTTL() = %v, want %v", got, tt.want)
-			}
-		})
+	if ok := SetTTL("key", "", 5*time.Second); ok {
+		t.Fatalf("SetTTL() with empty value = true, want false")
 	}
 }
 
-// go test -run ^TestGet'$ -v
 func TestGet(t *testing.T) {
 	resetCacheForTests()
-	TestRun(t)
-	TestSetTTL(t)
-	type args struct {
-		key string
+	SetProvider(&mockProvider{})
+
+	want := `{"cidade":"São Paulo","uf":"SP"}`
+	if ok := SetTTL("08226021", want, 5*time.Second); !ok {
+		t.Fatalf("SetTTL() = false, want true")
 	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{
-			name: "test_get_",
-			args: args{
-				key: `08226021`,
-			},
-			want: `{"cidade":"São Paulo","uf":"SP","logradouro":"18 de Abril","bairro":"Cidade Antônio Estevão de Carvalho"}`,
-		},
-		{
-			name: "test_get_",
-			args: args{
-				key: ``,
-			},
-			want: ``,
-		},
-		{
-			name: "test_get_",
-			args: args{
-				key: `01001000`,
-			},
-			want: ``,
-		},
+	if got := Get("08226021"); got != want {
+		t.Fatalf("Get() = %q, want %q", got, want)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Get(tt.args.key); got != tt.want {
-				t.Errorf("Get() = %v, want %v", got, tt.want)
-			}
-		})
+	if got := Get(""); got != "" {
+		t.Fatalf("Get(\"\") = %q, want empty", got)
+	}
+	if got := Get("unknown"); got != "" {
+		t.Fatalf("Get(\"unknown\") = %q, want empty", got)
 	}
 }
 
 func TestSetAnyTTLAndGetAny(t *testing.T) {
 	resetCacheForTests()
-	TestRun(t)
+	SetProvider(&mockProvider{})
 
 	type cacheValue struct {
 		Name string
 	}
+	want := cacheValue{Name: "gocep"}
 
-	value := cacheValue{Name: "gocep"}
-	if ok := SetAnyTTL("typed", value, time.Second); !ok {
+	if ok := SetAnyTTL("typed", want, time.Second); !ok {
 		t.Fatalf("SetAnyTTL() = false, want true")
 	}
-
 	got, found := GetAny("typed")
 	if !found {
 		t.Fatalf("GetAny() found = false, want true")
 	}
-
 	cast, ok := got.(cacheValue)
 	if !ok {
 		t.Fatalf("GetAny() type assertion failed: %T", got)
 	}
-	if cast != value {
-		t.Fatalf("GetAny() = %+v, want %+v", cast, value)
+	if cast != want {
+		t.Fatalf("GetAny() = %+v, want %+v", cast, want)
 	}
 }
 
 func TestSetAnyTTL_InvalidInput(t *testing.T) {
 	resetCacheForTests()
+
 	if ok := SetAnyTTL("", "value", time.Second); ok {
 		t.Fatalf("SetAnyTTL() with empty key = true, want false")
 	}
@@ -165,6 +89,7 @@ func TestSetAnyTTL_InvalidInput(t *testing.T) {
 
 func TestGetAny_EmptyKey(t *testing.T) {
 	resetCacheForTests()
+
 	got, found := GetAny("")
 	if found {
 		t.Fatalf("GetAny(\"\") found = true, want false")
@@ -176,6 +101,8 @@ func TestGetAny_EmptyKey(t *testing.T) {
 
 func TestGet_NonStringValue(t *testing.T) {
 	resetCacheForTests()
+	SetProvider(&mockProvider{})
+
 	if ok := SetAnyTTL("typed-not-string", struct{ ID int }{ID: 1}, time.Second); !ok {
 		t.Fatalf("SetAnyTTL() = false, want true")
 	}
@@ -184,46 +111,47 @@ func TestGet_NonStringValue(t *testing.T) {
 	}
 }
 
-func TestSerializeForRedis_JSONField(t *testing.T) {
-	type cachedLike struct {
-		JSON string
-	}
-
-	got, ok := serializeForRedis(cachedLike{JSON: `{"cidade":"São Paulo"}`})
-	if !ok {
-		t.Fatalf("serializeForRedis() ok = false, want true")
-	}
-	if got != `{"cidade":"São Paulo"}` {
-		t.Fatalf("serializeForRedis() = %q, want %q", got, `{"cidade":"São Paulo"}`)
-	}
+type mockProvider struct {
+	mu    sync.RWMutex
+	items map[string]any
 }
 
-func TestSerializeForRedis_UnsupportedType(t *testing.T) {
-	_, ok := serializeForRedis(struct{ Value int }{Value: 1})
-	if ok {
-		t.Fatalf("serializeForRedis() ok = true, want false for unsupported type")
+func (m *mockProvider) SetAnyTTL(key string, value any, _ time.Duration) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if key == "" || value == nil {
+		return false
 	}
+	if m.items == nil {
+		m.items = map[string]any{}
+	}
+	m.items[key] = value
+	return true
 }
 
-func TestRun_RedisFallbackStillProvidesMemoryCache(t *testing.T) {
+func (m *mockProvider) GetAny(key string) (any, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.items[key]
+	return v, ok
+}
+
+func TestSetProvider_UsesCustomImplementation(t *testing.T) {
 	resetCacheForTests()
 
-	oldBackend := config.CacheBackend
-	oldAddr := config.RedisAddr
-	oldPrefix := config.RedisPrefix
-	config.CacheBackend = "redis"
-	config.RedisAddr = "127.0.0.1:1"
-	config.RedisPrefix = "gocep:"
-	t.Cleanup(func() {
-		config.CacheBackend = oldBackend
-		config.RedisAddr = oldAddr
-		config.RedisPrefix = oldPrefix
-	})
+	provider := &mockProvider{}
+	SetProvider(provider)
+	t.Cleanup(func() { SetProvider(nil) })
 
-	if got := Run(); got == nil {
-		t.Fatalf("Run() = nil, want non-nil memory cache fallback")
+	if ok := SetAnyTTL("custom-key", "custom-value", time.Second); !ok {
+		t.Fatalf("SetAnyTTL() = false, want true")
 	}
-	if IsRedisBackend() {
-		t.Fatalf("IsRedisBackend() = true, want false when redis init fails")
+
+	got, found := GetAny("custom-key")
+	if !found {
+		t.Fatalf("GetAny() found = false, want true")
+	}
+	if gotStr, ok := got.(string); !ok || gotStr != "custom-value" {
+		t.Fatalf("GetAny() = %v (%T), want custom-value", got, got)
 	}
 }

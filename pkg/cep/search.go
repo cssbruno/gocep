@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
-	"time"
 
-	"github.com/cssbruno/gocep/config"
 	"github.com/cssbruno/gocep/models"
 	"github.com/cssbruno/gocep/pkg/util"
 	"github.com/cssbruno/gocep/service/gocache"
@@ -31,18 +29,19 @@ var searchSingleflight singleflight.Group
 func Search(cep string) (jsonCep string, address models.CEPAddress, err error) {
 	normalizedCEP, ok := normalizeSearchInput(cep)
 	if !ok {
-		return config.JsonDefault, models.CEPAddress{}, nil
+		return GetOptions().DefaultJSON, models.CEPAddress{}, nil
 	}
 
 	if cachedJSON, cachedAddress, found := readCachedResult(normalizedCEP); found {
 		return cachedJSON, cachedAddress, nil
 	}
 
-	if len(models.Endpoints) == 0 {
-		return config.JsonDefault, models.CEPAddress{}, nil
+	endpoints := models.GetEndpoints()
+	if len(endpoints) == 0 {
+		return GetOptions().DefaultJSON, models.CEPAddress{}, nil
 	}
 
-	return searchProvidersSingleflight(normalizedCEP)
+	return searchProvidersSingleflight(normalizedCEP, endpoints)
 }
 
 func normalizeSearchInput(cep string) (string, bool) {
@@ -59,7 +58,8 @@ func normalizeSearchInput(cep string) (string, bool) {
 }
 
 func readCachedResult(cep string) (jsonCep string, address models.CEPAddress, found bool) {
-	if !config.CacheEnabled {
+	opts := GetOptions()
+	if !opts.CacheEnabled {
 		return "", models.CEPAddress{}, false
 	}
 
@@ -82,21 +82,19 @@ func readCachedResult(cep string) (jsonCep string, address models.CEPAddress, fo
 		if !isCompleteAddress(parsedAddress) {
 			return "", models.CEPAddress{}, false
 		}
-		if !gocache.IsRedisBackend() {
-			_ = gocache.SetAnyTTL(cep, cachedResult{
-				JSON:    cached,
-				Address: parsedAddress,
-			}, time.Duration(config.TTLCache)*time.Second)
-		}
+		_ = gocache.SetAnyTTL(cep, cachedResult{
+			JSON:    cached,
+			Address: parsedAddress,
+		}, opts.CacheTTL)
 		return cached, parsedAddress, true
 	default:
 		return "", models.CEPAddress{}, false
 	}
 }
 
-func searchProvidersSingleflight(cep string) (string, models.CEPAddress, error) {
+func searchProvidersSingleflight(cep string, endpoints []models.Endpoint) (string, models.CEPAddress, error) {
 	value, _, _ := searchSingleflight.Do(cep, func() (any, error) {
-		jsonCep, address := searchProviders(cep)
+		jsonCep, address := searchProviders(cep, endpoints)
 		return cachedResult{
 			JSON:    jsonCep,
 			Address: address,
@@ -105,21 +103,21 @@ func searchProvidersSingleflight(cep string) (string, models.CEPAddress, error) 
 
 	result, ok := value.(cachedResult)
 	if !ok {
-		return config.JsonDefault, models.CEPAddress{}, nil
+		return GetOptions().DefaultJSON, models.CEPAddress{}, nil
 	}
 
 	return result.JSON, result.Address, nil
 }
 
-func searchProviders(cep string) (jsonCep string, address models.CEPAddress) {
-	results := make(chan Result, len(models.Endpoints))
-	ctx, cancel := context.WithTimeout(context.Background(),
-		time.Duration(config.TimeoutSearchCEP)*time.Second)
+func searchProviders(cep string, endpoints []models.Endpoint) (jsonCep string, address models.CEPAddress) {
+	opts := GetOptions()
+	results := make(chan Result, len(endpoints))
+	ctx, cancel := context.WithTimeout(context.Background(), opts.SearchTimeout)
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(len(models.Endpoints))
-	for _, endpoint := range models.Endpoints {
+	wg.Add(len(endpoints))
+	for _, endpoint := range endpoints {
 		go func() {
 			defer wg.Done()
 			dispatchProviderRequest(ctx, cancel, cep, endpoint, results)
@@ -135,14 +133,14 @@ func searchProviders(cep string) (jsonCep string, address models.CEPAddress) {
 		select {
 		case result, ok := <-results:
 			if !ok {
-				return config.JsonDefault, models.CEPAddress{}
+				return opts.DefaultJSON, models.CEPAddress{}
 			}
 			jsonCep = string(result.Body)
 			address = result.Address
 			cacheSearchResult(cep, jsonCep, address)
 			return jsonCep, address
 		case <-ctx.Done():
-			return config.JsonDefault, models.CEPAddress{}
+			return opts.DefaultJSON, models.CEPAddress{}
 		}
 	}
 }
@@ -156,21 +154,17 @@ func dispatchProviderRequest(ctx context.Context, cancel context.CancelFunc, cep
 }
 
 func cacheSearchResult(cep, jsonCep string, address models.CEPAddress) {
-	if !config.CacheEnabled || !isCompleteAddress(address) {
+	opts := GetOptions()
+	if !opts.CacheEnabled || !isCompleteAddress(address) {
 		return
 	}
 
 	gocache.SetAnyTTL(cep, cachedResult{
 		JSON:    jsonCep,
 		Address: address,
-	}, time.Duration(config.TTLCache)*time.Second)
+	}, opts.CacheTTL)
 }
 
 func ValidCEP(address models.CEPAddress) bool {
 	return isCompleteAddress(address)
-}
-
-// Deprecated: use ValidCEP.
-func ValidCep(address models.CEPAddress) bool {
-	return ValidCEP(address)
 }
