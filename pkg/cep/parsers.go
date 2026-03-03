@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/pkg/util"
 )
 
 var errUnknownParserSource = errors.New("unknown parser source")
@@ -100,10 +101,10 @@ func decodeProviderPayload(body []byte, dst any) error {
 }
 
 func buildAddress(city, stateCode, street, neighborhood string) models.CEPAddress {
-	return models.CEPAddress{
+	return util.NormalizeAddress(models.CEPAddress{
 		City:         city,
 		StateCode:    stateCode,
 		Street:       street,
 		Neighborhood: neighborhood,
-	}
+	})
 }

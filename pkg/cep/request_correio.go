@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/pkg/util"
 )
 
 // requestCorreio performs concurrent lookups against Correio SOAP API.
@@ -39,13 +40,13 @@ func requestCorreio(ctx context.Context, cancel context.CancelFunc, cep, method,
 	err = xml.Unmarshal(rawBody, correio)
 	if err == nil {
 		c := correio.Body.LookupCEPResponse.Return
-		address := models.CEPAddress{
+		address := util.NormalizeAddress(models.CEPAddress{
 			CEP:          formattedCEPOrRaw(cep),
 			City:         c.City,
 			StateCode:    c.StateCode,
 			Street:       c.Address,
 			Neighborhood: c.Neighborhood,
-		}
+		})
 		sendAddressResult(ctx, cancel, chResult, address)
 	}
 }

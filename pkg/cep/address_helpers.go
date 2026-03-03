@@ -15,8 +15,8 @@ func formattedCEPOrRaw(cep string) string {
 
 func withCEP(address models.CEPAddress, cep string) models.CEPAddress {
 	if address.CEP != "" {
-		return address
+		return util.NormalizeAddress(address)
 	}
 	address.CEP = formattedCEPOrRaw(cep)
-	return address
+	return util.NormalizeAddress(address)
 }

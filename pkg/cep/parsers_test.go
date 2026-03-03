@@ -40,6 +40,18 @@ func TestParseCEPAddress(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:   "parse viacep with padded fields",
+			source: models.SourceViaCep,
+			body:   []byte(`{"cep":"01001-000","logradouro":"  Praça da Sé  ","localidade":"  São Paulo\t","uf":" sp ","bairro":"\nSé "}`),
+			want: models.CEPAddress{
+				City:         "São Paulo",
+				StateCode:    "SP",
+				Street:       "Praça da Sé",
+				Neighborhood: "Sé",
+			},
+			wantErr: false,
+		},
+		{
 			name:   "parse githubjeffotoni",
 			source: models.SourceGitHubJeffotoni,
 			body:   []byte(`{"cep":"01001-000","logradouro":"da Sé","bairro":"Sé","uf":"SP","cidade":"São Paulo"}`),

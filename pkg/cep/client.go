@@ -565,13 +565,13 @@ func queryCorreioEndpoint(ctx context.Context, httpClient *http.Client, maxBody 
 	}
 
 	responseAddress := correio.Body.LookupCEPResponse.Return
-	address := models.CEPAddress{
+	address := util.NormalizeAddress(models.CEPAddress{
 		CEP:          formattedCEPOrRaw(cep),
 		City:         responseAddress.City,
 		StateCode:    responseAddress.StateCode,
 		Street:       responseAddress.Address,
 		Neighborhood: responseAddress.Neighborhood,
-	}
+	})
 	if !isCompleteAddress(address) {
 		return Result{}, ErrNotFound
 	}
