@@ -36,6 +36,26 @@ jobs:
           go test -race ./...
           go vet ./...
 
+      - name: Install quality tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+
+      - name: Run staticcheck
+        run: "$(go env GOPATH)/bin/staticcheck" ./...
+
+      - name: Run golangci-lint (pinned linters)
+        run: "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m --disable-all --enable=govet --enable=staticcheck ./...
+
+      - name: Run govulncheck
+        run: "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: Validate examples
+        run: |
+          go run ./examples/go/lib
+          go run ./examples/go/client
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:

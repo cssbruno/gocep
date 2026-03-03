@@ -13,7 +13,9 @@ The library accepts both formats:
 
 ## Features
 - Parallel provider lookup with first-success response
+- Optional ordered fallback strategy with provider policy controls
 - Normalized CEP address output (`cidade`, `uf`, `logradouro`, `bairro`)
+- Isolated `cep.Client` API (per-client options, HTTP client, cache, endpoints, hooks)
 - Pluggable cache provider (user implementation)
 - CEP validation and normalization utilities
 - Stable API for direct library integration
@@ -28,13 +30,23 @@ go get github.com/cssbruno/gocep@latest
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cssbruno/gocep/pkg/cep"
 )
 
 func main() {
-	resultJSON, normalized, err := cep.Search("01001-000")
+	resultJSON, normalized, err := cep.SearchContext(context.Background(), "01001-000")
+	switch {
+	case errors.Is(err, cep.ErrInvalidCEP):
+		fmt.Println("invalid cep")
+	case errors.Is(err, cep.ErrTimeout):
+		fmt.Println("lookup timed out")
+	case errors.Is(err, cep.ErrNotFound):
+		fmt.Println("cep not found")
+	}
 	fmt.Println("error:", err)
 	fmt.Println("json:", resultJSON)
 	fmt.Println("address:", normalized)
@@ -114,19 +126,73 @@ Main options:
 - `cep.Options.SearchTimeout`
 - `cep.Options.MaxProviderBody`
 
+## Advanced Client API
+Use `cep.NewClient(...)` when you need isolated configuration instead of global package state.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/cssbruno/gocep/pkg/cep"
+)
+
+type myCacheProvider struct{}
+
+func (myCacheProvider) SetAnyTTL(key string, value any, ttl time.Duration) bool { return true }
+func (myCacheProvider) GetAny(key string) (any, bool) { return nil, false }
+
+func main() {
+	opts := cep.Options{
+		DefaultJSON:     `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
+		CacheEnabled:    true,
+		CacheTTL:        24 * time.Hour,
+		SearchTimeout:   5 * time.Second,
+		MaxProviderBody: 1 << 20,
+	}
+
+	httpClient := &http.Client{Timeout: 6 * time.Second}
+
+client := cep.NewClient(
+	cep.WithOptions(opts),
+	cep.WithHTTPClient(httpClient),
+	cep.WithCacheProvider(myCacheProvider{}),
+	cep.WithProviderPolicy(cep.ProviderPolicy{
+		Strategy:         cep.SearchStrategyOrderedFallback,
+		PreferredSources: []string{"brasilapi", "viacep"},
+	}),
+)
+
+	result, address, err := client.SearchContext(context.Background(), "01001-000")
+	fmt.Println(result, address, err)
+}
+```
+
 ## API Reference
 - `cep.Search(cep string) (string, models.CEPAddress, error)`:
-  runs all configured providers in parallel and returns the first complete address.
+  runs lookup with the package default client.
+- `cep.SearchContext(ctx, cep string) (string, models.CEPAddress, error)`:
+  lookup with caller-controlled cancellation/deadline.
+- `cep.NewClient(...)` and `client.SearchContext(...)`:
+  isolated client configuration and lookups.
 - `cep.ValidCEP(models.CEPAddress) bool`:
   validates normalized address completeness (`cidade`, `uf`, `logradouro`, `bairro`).
 - `cep.GetOptions()` / `cep.SetOptions(...)`:
-  read/update runtime search behavior.
+  read/update options for the package default client.
 - `cep.SetHTTPClient(client *http.Client)`:
-  override outbound HTTP behavior (timeout, proxy, transport).
+  override HTTP client for the package default client.
 - `cep.SetCacheProvider(provider)`:
-  register a user cache backend.
+  register cache backend for the package default client.
+- `cep.SetProviderPolicy(policy)`:
+  configure ordered fallback, preferred sources, disabled sources, and per-source timeouts.
+- `cep.SetHooks(hooks)`:
+  attach cache/provider event callbacks.
 - `models.GetEndpoints()` / `models.SetEndpoints(...)`:
-  read/update provider list safely.
+  read/update global provider list safely.
 - `util.CheckCEP`, `util.NormalizeCEP`, `util.FormatCEP`:
   input validation and format helpers.
 
@@ -134,11 +200,13 @@ Behavior notes:
 - Search accepts `00000000` and `00000-000`.
 - Only `https` provider URLs are accepted.
 - Cache is used only when `Options.CacheEnabled` is true and a provider is set with `cep.SetCacheProvider(...)`.
-- If no provider returns a complete address, `Search` returns `Options.DefaultJSON`.
-- `Search` currently returns `nil` error and uses the JSON/address return values for lookup outcome.
+- If no provider returns a complete address, lookup returns `Options.DefaultJSON` and `cep.ErrNotFound`.
+- Invalid CEP returns `cep.ErrInvalidCEP`.
+- Timeout returns `cep.ErrTimeout`.
+- Provider-specific timeout failures also return `cep.ErrTimeout` when no provider succeeds.
 
 Global configuration notes:
-- `cep.SetOptions`, `cep.SetHTTPClient`, `cep.SetCacheProvider`, and `models.SetEndpoints` update process-wide state.
+- `cep.SetOptions`, `cep.SetHTTPClient`, `cep.SetCacheProvider`, `cep.SetProviderPolicy`, `cep.SetHooks`, and `models.SetEndpoints` update process-wide state.
 - Configure them during startup before handling concurrent calls to `cep.Search`.
 
 ## Examples
@@ -162,15 +230,18 @@ Tag format:
 
 Release flow:
 1. Commit and push your changes to `master`/`main`.
-2. Create an annotated tag:
+2. Update [`CHANGELOG.md`](CHANGELOG.md):
+   - Move relevant items from `Unreleased` to a new version section.
+   - Keep entries grouped under `Added`, `Changed`, `Fixed`, `Removed` when applicable.
+3. Create an annotated tag:
    ```bash
    git tag -a v1.4.0 -m "release v1.4.0"
    ```
-3. Push the tag:
+4. Push the tag:
    ```bash
    git push origin v1.4.0
    ```
-4. Workflow [`release.yml`](.github/workflows/release.yml) runs tests/race/vet and publishes a GitHub Release with generated notes.
+5. Workflow [`release.yml`](.github/workflows/release.yml) runs tests/race/vet/staticcheck/golangci-lint/govulncheck, validates examples, and publishes a GitHub Release with generated notes.
 
 ## Credits
 Original project and base implementation by **Jeffotoni**:

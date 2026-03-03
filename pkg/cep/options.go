@@ -1,9 +1,6 @@
 package cep
 
-import (
-	"sync"
-	"time"
-)
+import "time"
 
 // Options controls runtime behavior for CEP searches.
 type Options struct {
@@ -19,31 +16,26 @@ type Options struct {
 	MaxProviderBody int64
 }
 
-var (
-	optionsMu sync.RWMutex
-	options   = Options{
+func defaultOptions() Options {
+	return Options{
 		DefaultJSON:     `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
 		CacheEnabled:    true,
 		CacheTTL:        48 * time.Hour,
 		SearchTimeout:   15 * time.Second,
 		MaxProviderBody: 1 << 20,
 	}
-)
+}
 
 // GetOptions returns a copy of the current CEP options.
 func GetOptions() Options {
-	optionsMu.RLock()
-	defer optionsMu.RUnlock()
-	return options
+	return defaultClient.Options()
 }
 
 // SetOptions replaces CEP package options for the current process.
 // Empty or invalid fields are normalized to safe defaults.
 // Applications should configure options during startup.
 func SetOptions(next Options) {
-	optionsMu.Lock()
-	defer optionsMu.Unlock()
-	options = normalizeOptions(next)
+	defaultClient.SetOptions(next)
 }
 
 func normalizeOptions(in Options) Options {

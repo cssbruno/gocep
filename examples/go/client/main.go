@@ -34,7 +34,7 @@ func main() {
 	opts := cep.GetOptions()
 	opts.CacheEnabled = true
 	opts.CacheTTL = 10 * time.Minute
-	opts.SearchTimeout = 8 * time.Second
+	opts.SearchTimeout = 5 * time.Second
 	cep.SetOptions(opts)
 	cep.SetCacheProvider(&inMemoryCache{})
 

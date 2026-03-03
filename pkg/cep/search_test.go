@@ -1,6 +1,7 @@
 package cep
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,42 +33,47 @@ func TestSearch(t *testing.T) {
 		args    args
 		want    string
 		wantCep bool
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name:    "test_search_1",
 			args:    args{"08226024"},
 			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"Rua Esperança","bairro":"Cidade Antônio Estevão de Carvalho"}`,
 			wantCep: true,
-			wantErr: false, // (err != nil) => false
+			wantErr: nil,
 		},
 		{
 			name:    "test_search_2",
 			args:    args{"01001000"},
 			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
 			wantCep: true,
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name:    "test_search_hyphenated_cep",
 			args:    args{"01001-000"},
 			want:    `{"cidade":"São Paulo","uf":"SP","logradouro":"da Sé","bairro":"Sé"}`,
 			wantCep: true,
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name:    "test_search_3",
 			args:    args{""},
 			want:    `{"cidade":"","uf":"","logradouro":"","bairro":""}`,
 			wantCep: false,
-			wantErr: false,
+			wantErr: ErrInvalidCEP,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, address, err := Search(tt.args.cep)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Search() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr == nil {
+				if err != nil {
+					t.Errorf("Search() error = %v, want nil", err)
+					return
+				}
+			} else if !errors.Is(err, tt.wantErr) {
+				t.Errorf("Search() error = %v, want %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
@@ -221,8 +227,8 @@ func TestSearchTimeoutReturnsDefault(t *testing.T) {
 	})
 
 	gotBody, gotAddress, err := Search("12345678")
-	if err != nil {
-		t.Fatalf("Search() error = %v, want nil", err)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrTimeout)
 	}
 	if gotBody != GetOptions().DefaultJSON {
 		t.Fatalf("Search() body = %s, want %s", gotBody, GetOptions().DefaultJSON)
@@ -244,8 +250,8 @@ func TestSearchNoEndpointsReturnsDefault(t *testing.T) {
 	gotBody, gotAddress, err := Search("12345678")
 	elapsed := time.Since(start)
 
-	if err != nil {
-		t.Fatalf("Search() error = %v, want nil", err)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrNotFound)
 	}
 	if gotBody != GetOptions().DefaultJSON {
 		t.Fatalf("Search() body = %s, want %s", gotBody, GetOptions().DefaultJSON)
@@ -278,8 +284,8 @@ func TestSearchInvalidCEPSkipsProviderRequests(t *testing.T) {
 	})
 
 	gotBody, gotAddress, err := Search("abc")
-	if err != nil {
-		t.Fatalf("Search() error = %v, want nil", err)
+	if !errors.Is(err, ErrInvalidCEP) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrInvalidCEP)
 	}
 	if gotBody != GetOptions().DefaultJSON {
 		t.Fatalf("Search() body = %s, want %s", gotBody, GetOptions().DefaultJSON)
@@ -313,8 +319,8 @@ func TestSearchAllProvidersDoneReturnsBeforeTimeout(t *testing.T) {
 	gotBody, gotAddress, err := Search("01001000")
 	elapsed := time.Since(start)
 
-	if err != nil {
-		t.Fatalf("Search() error = %v, want nil", err)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrNotFound)
 	}
 	if gotBody != GetOptions().DefaultJSON {
 		t.Fatalf("Search() body = %s, want %s", gotBody, GetOptions().DefaultJSON)

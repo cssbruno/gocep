@@ -2,6 +2,8 @@ package cep
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -9,25 +11,36 @@ import (
 )
 
 func executeRequest(req *http.Request) (*http.Response, bool) {
-	if req == nil || req.URL == nil || !strings.EqualFold(req.URL.Scheme, "https") {
+	response, err := executeRequestWithClient(getHTTPClient(), req)
+	if err != nil {
 		return nil, false
 	}
+	return response, true
+}
 
-	response, err := getHTTPClient().Do(req)
+func executeRequestWithClient(client *http.Client, req *http.Request) (*http.Response, error) {
+	if req == nil || req.URL == nil || !strings.EqualFold(req.URL.Scheme, "https") {
+		return nil, errors.New("non-tls provider URL")
+	}
+	if client == nil {
+		client = newDefaultHTTPClient()
+	}
+
+	response, err := client.Do(req)
 	if err != nil {
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()
 		}
-		return nil, false
+		return nil, err
 	}
 	if response == nil {
-		return nil, false
+		return nil, errors.New("nil response")
 	}
 	if response.StatusCode != http.StatusOK {
 		_ = response.Body.Close()
-		return nil, false
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
-	return response, true
+	return response, nil
 }
 
 func sendAddressResult(ctx context.Context, cancel context.CancelFunc, chResult chan<- Result, address models.CEPAddress) {

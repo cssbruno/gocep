@@ -2,7 +2,6 @@ package cep
 
 import (
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -13,29 +12,15 @@ const (
 	defaultHTTPTimeout             = 30 * time.Second
 )
 
-var (
-	httpClientMu sync.RWMutex
-	httpClient   = newDefaultHTTPClient()
-)
-
 // SetHTTPClient overrides the HTTP client used for provider requests.
 // Passing nil restores the package default client.
 // The setting is global for the current process.
 func SetHTTPClient(client *http.Client) {
-	httpClientMu.Lock()
-	defer httpClientMu.Unlock()
-
-	if client == nil {
-		httpClient = newDefaultHTTPClient()
-		return
-	}
-	httpClient = client
+	defaultClient.SetHTTPClient(client)
 }
 
 func getHTTPClient() *http.Client {
-	httpClientMu.RLock()
-	defer httpClientMu.RUnlock()
-	return httpClient
+	return defaultClient.HTTPClient()
 }
 
 func newDefaultHTTPClient() *http.Client {

@@ -2,8 +2,6 @@ package cep
 
 import (
 	"time"
-
-	"github.com/cssbruno/gocep/service/gocache"
 )
 
 // CacheProvider is an application-provided cache backend implementation.
@@ -16,5 +14,5 @@ type CacheProvider interface {
 // Passing nil disables cache usage at the provider layer.
 // The setting is global for the current process.
 func SetCacheProvider(provider CacheProvider) {
-	gocache.SetProvider(provider)
+	defaultClient.SetCacheProvider(provider)
 }
