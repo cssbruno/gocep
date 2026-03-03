@@ -1,10 +1,9 @@
 module github.com/cssbruno/gocep
 
-go 1.24.0
+go 1.26.0
 
 require (
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/rs/cors v1.11.1
 	golang.org/x/sync v0.19.0
 )
 

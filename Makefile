@@ -6,29 +6,20 @@ GOPROXY=https://proxy.golang.org,direct
 GOSUMDB=sum.golang.org
 GOPRIVATE=github.com/cssbruno/gocep
 
-.PHONY: build update compose test
-
-build:
-	@echo "########## Building API ..."
-	go build -ldflags="-s -w" -o gocep ./cmd/gocep-server
-	#upx gocep
-	@echo "build completed"
-	@echo "\033[0;33m################ run #####################\033[0m"
-	rm -f gocep
+.PHONY: update test
 
 update:
-	@echo "########## Updating dependencies ..."
+	@echo "########## Updating dependencies and checks ..."
 	go get -u -t ./...
 	go mod tidy
 	go test ./...
+	go test -race ./...
+	go vet ./...
 	@echo "dependency update completed"
 
-compose:
-	@echo "########## Running deployment script ..."
-	sh deploy/docker/deploy.sh
-	@echo "done"
-
 test: 
+	go test -v ./...
 	go test -race -v ./...
-	go test -v -tags musl -covermode=atomic -coverprofile=coverage.out ./...
+	go vet ./...
+	go test -v -covermode=atomic -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out

@@ -1,37 +1,29 @@
 # gocep
-[![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gocep.svg)](https://pkg.go.dev/github.com/cssbruno/gocep) ![GitHub Release](https://img.shields.io/github/v/release/cssbruno/gocep?include_prereleases) [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gocep)](https://goreportcard.com/report/github.com/cssbruno/gocep) [![License](https://img.shields.io/github/license/cssbruno/gocep)](https://github.com/cssbruno/gocep/blob/master/LICENSE)
+[![CI](https://github.com/cssbruno/gocep/actions/workflows/ci.yml/badge.svg)](https://github.com/cssbruno/gocep/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gocep.svg)](https://pkg.go.dev/github.com/cssbruno/gocep) ![GitHub Release](https://img.shields.io/github/v/release/cssbruno/gocep?include_prereleases) [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gocep)](https://goreportcard.com/report/github.com/cssbruno/gocep) [![License](https://img.shields.io/github/license/cssbruno/gocep)](https://github.com/cssbruno/gocep/blob/master/LICENSE)
 
-Fast CEP lookup API and Go library.
-It queries multiple public providers in parallel, returns the first successful address, and caches results in memory.
+Fast CEP lookup library for Go.
+It queries multiple providers in parallel, returns the first successful address, and supports cache backends for repeated lookups.
 
 ## What Is a CEP?
 `CEP` means `Codigo de Enderecamento Postal` in Brazil.
 It is the Brazilian postal code, similar to a ZIP code in the US.
-This API accepts both formats: `00000-000` (for example `01001-000`) and `00000000` (for example `01001000`).
+The library accepts both formats:
+- `00000-000` (example: `01001-000`)
+- `00000000` (example: `01001000`)
 
-## Why This Project
-- Reusable Go package: [`pkg/cep`](pkg/cep)
-- Concurrent lookup across multiple providers
-- In-memory cache for repeated CEP queries
-- REST endpoint: `GET /v1/cep/{cep}`
-- Deterministic JSON error contract
+## Features
+- Parallel provider lookup with first-success response
+- Normalized CEP address output (`cidade`, `uf`, `logradouro`, `bairro`)
+- Built-in caching (`memory` or `redis`)
+- CEP validation and normalization utilities
+- Stable API for direct library integration
 
-## Language Standardization
-The codebase was standardized to English so contributors from different countries can read and maintain it more easily.
-
-Some provider field names remain in Portuguese in JSON/XML mappings because they are external protocol contracts.
-
-## Credits
-Original project and base implementation by **Jeffotoni**:
-- GitHub: https://github.com/jeffotoni
-- Repository: https://github.com/jeffotoni/gocep
-
-## Quick Start (Go Library First)
-### Use as a Go library
+## Install
 ```bash
 go get github.com/cssbruno/gocep@latest
 ```
 
+## Basic Usage
 ```go
 package main
 
@@ -42,80 +34,33 @@ import (
 )
 
 func main() {
-	resultJSON, normalized, err := cep.Search("01001000")
+	resultJSON, normalized, err := cep.Search("01001-000")
 	fmt.Println("error:", err)
 	fmt.Println("json:", resultJSON)
 	fmt.Println("address:", normalized)
 }
 ```
 
-### Run HTTP server (optional)
-```bash
-git clone https://github.com/cssbruno/gocep.git
-cd gocep
-go run ./cmd/gocep-server
-```
+## CEP Utility Helpers
+```go
+package main
 
-Default server address: `0.0.0.0:8080`
+import (
+	"fmt"
 
-### Test the API
-```bash
-curl -i http://localhost:8080/v1/cep/01001000
-```
+	"github.com/cssbruno/gocep/pkg/util"
+)
 
-### Docker (optional, low priority)
-```bash
-docker run --name gocep --rm -p 8080:8080 cssbruno/gocep:latest
-```
+func main() {
+	normalized, err := util.NormalizeCEP("01001-000")
+	fmt.Println(normalized, err) // 01001000 <nil>
 
-Or run the local Docker example:
-```bash
-make compose
-```
-
-Docker assets are now grouped in [`deploy/docker/`](deploy/docker/).
-
-## HTTP API
-### Main route
-- `GET /v1/cep/{cep}`
-
-### Success response (`200`)
-```json
-{
-  "cidade": "Sao Paulo",
-  "uf": "SP",
-  "logradouro": "Praca da Se",
-  "bairro": "Se"
+	formatted, err := util.FormatCEP("01001000")
+	fmt.Println(formatted, err) // 01001-000 <nil>
 }
 ```
 
-### No content (`204`)
-Returned when the CEP format is valid, but no provider returned a complete address.
-
-### Error response format
-```json
-{
-  "error": {
-    "code": "invalid_cep",
-    "message": "cep must be in 00000000 or 00000-000 format"
-  }
-}
-```
-
-### Complete list of error codes
-| HTTP status | Error code | When it happens |
-| --- | --- | --- |
-| `302` | `invalid_endpoint` | CEP path is malformed (example: extra slash `/v1/cep/01001000/`) |
-| `400` | `invalid_cep` | CEP is not valid in `00000000` or `00000-000` format |
-| `400` | `search_error` | Internal CEP search call returned an error |
-| `404` | `not_found` | Route not mapped (for example `/any-other-path`) |
-| `405` | `method_not_allowed` | Route exists but method is not `GET` |
-
-Notes:
-- `200` and `204` are successful outcomes and do not include an `error.code`.
-- `302 invalid_endpoint` is kept for backward compatibility with current behavior.
-
-## Current Providers
+## Providers
 Configured in [`models/endpoints.go`](models/endpoints.go):
 - CDN API CEP
 - GitHub raw CEP base
@@ -129,22 +74,13 @@ Configured in [`models/endpoints.go`](models/endpoints.go):
 
 ## Configuration
 Main environment variables from [`config/config.go`](config/config.go):
-- `PORT` (default: `0.0.0.0:8080`)
 - `CACHE_ENABLE` (default: `true`)
+- `CACHE_BACKEND` (`memory` or `redis`, default: `memory`)
 - `TTL_CACHE` seconds (default: `172800`)
 - `TIMEOUT_SEARCH_CEP` seconds (default: `15`)
-- `HTTP_CLIENT_MAXIDLECONNS`
-- `HTTP_CLIENT_MAXIDLECONNSPERHOST`
-- `IDLE_CONN_TIMEOUT`
-- `TIMEOUT`
+- `TIMEOUT` seconds (default: `30`)
 - `MAX_PROVIDER_BODY` bytes (default: `1048576`)
-- `SERVER_READ_HEADER_TIMEOUT` seconds (default: `5`)
-- `SERVER_READ_TIMEOUT` seconds (default: `10`)
-- `SERVER_WRITE_TIMEOUT` seconds (default: `15`)
-- `SERVER_IDLE_TIMEOUT` seconds (default: `120`)
-- `SERVER_MAX_HEADER_BYTES` bytes (default: `1048576`)
 - `INSECURE_SKIP_VERIFY` (default: `false`)
-- `CACHE_BACKEND` (`memory` or `redis`, default: `memory`)
 - `REDIS_ADDR` (default: `127.0.0.1:6379`)
 - `REDIS_USER`
 - `REDIS_PASSWORD`
@@ -153,7 +89,7 @@ Main environment variables from [`config/config.go`](config/config.go):
 
 ## Examples
 Examples in [`examples/`](examples/):
-- `go` (lib/client/server)
+- `go` (lib/client)
 - `nodejs`
 - `javascript`
 - `python`
@@ -161,8 +97,6 @@ Examples in [`examples/`](examples/):
 - `rust`
 - `c`
 - `c++`
-
-Deployment/container files are in [`deploy/docker/`](deploy/docker/).
 
 ## Development
 ```bash
@@ -188,4 +122,9 @@ Release flow:
    ```bash
    git push origin v1.4.0
    ```
-4. Workflow [`release.yml`](.github/workflows/release.yml) runs tests, race tests, vet, builds binaries, and publishes a GitHub Release with generated notes.
+4. Workflow [`release.yml`](.github/workflows/release.yml) runs tests/race/vet and publishes a GitHub Release with generated notes.
+
+## Credits
+Original project and base implementation by **Jeffotoni**:
+- GitHub: https://github.com/jeffotoni
+- Repository: https://github.com/jeffotoni/gocep

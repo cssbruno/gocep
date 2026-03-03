@@ -249,7 +249,7 @@ func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
 	wg.Add(workers)
 
 	errs := make(chan string, workers)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			defer wg.Done()
 			gotBody, gotAddress, err := Search(cepCode)

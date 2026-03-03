@@ -120,7 +120,6 @@ func searchProviders(cep string) (jsonCep string, address models.CEPAddress) {
 	var wg sync.WaitGroup
 	wg.Add(len(models.Endpoints))
 	for _, endpoint := range models.Endpoints {
-		endpoint := endpoint
 		go func() {
 			defer wg.Done()
 			dispatchProviderRequest(ctx, cancel, cep, endpoint, results)
