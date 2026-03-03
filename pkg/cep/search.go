@@ -24,8 +24,10 @@ type cachedResult struct {
 
 var searchSingleflight singleflight.Group
 
-// Search concurrently looks up a CEP using providers declared in [models/endpoints.go].
-// It returns the first JSON response and the normalized CEP address payload.
+// Search concurrently looks up a CEP using configured endpoints.
+// It returns the first successful provider payload and normalized address.
+// When no complete address is found, it returns Options.DefaultJSON and an empty address.
+// The returned error is reserved for future use and is currently nil.
 func Search(cep string) (jsonCep string, address models.CEPAddress, err error) {
 	normalizedCEP, ok := normalizeSearchInput(cep)
 	if !ok {
@@ -165,6 +167,7 @@ func cacheSearchResult(cep, jsonCep string, address models.CEPAddress) {
 	}, opts.CacheTTL)
 }
 
+// ValidCEP reports whether an address has all required normalized fields.
 func ValidCEP(address models.CEPAddress) bool {
 	return isCompleteAddress(address)
 }

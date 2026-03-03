@@ -16,12 +16,14 @@ var (
 	provider   Provider
 )
 
+// SetProvider sets the active cache backend implementation.
 func SetProvider(p Provider) {
 	providerMu.Lock()
 	provider = p
 	providerMu.Unlock()
 }
 
+// SetTTL stores a string value in cache with a TTL.
 func SetTTL(key, value string, ttl time.Duration) bool {
 	if key == "" || value == "" {
 		return false
@@ -29,6 +31,7 @@ func SetTTL(key, value string, ttl time.Duration) bool {
 	return SetAnyTTL(key, value, ttl)
 }
 
+// SetAnyTTL stores any value in cache with a TTL.
 func SetAnyTTL(key string, value any, ttl time.Duration) bool {
 	if key == "" || value == nil {
 		return false
@@ -43,6 +46,7 @@ func SetAnyTTL(key string, value any, ttl time.Duration) bool {
 	return p.SetAnyTTL(key, value, ttl)
 }
 
+// GetAny returns a cached value and whether it was found.
 func GetAny(key string) (any, bool) {
 	if key == "" {
 		return nil, false
@@ -57,6 +61,7 @@ func GetAny(key string) (any, bool) {
 	return p.GetAny(key)
 }
 
+// Get returns a cached value as string when possible.
 func Get(key string) string {
 	value, found := GetAny(key)
 	if !found {

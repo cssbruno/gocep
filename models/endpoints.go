@@ -2,17 +2,26 @@ package models
 
 import "sync"
 
+// Endpoint configures a single CEP provider request.
 type Endpoint struct {
+	// Method is the HTTP method used by the provider.
 	Method string
+	// Source identifies the parser used for the provider response.
 	Source string
-	URL    string
-	Body   string
+	// URL is the endpoint template; CEP must be injected with "%s".
+	URL string
+	// Body is an optional request payload template, used by SOAP providers.
+	Body string
 }
 
+// HTTP method constants used by endpoint definitions.
 const (
 	MethodGet  = "GET"
 	MethodPost = "POST"
+)
 
+// Source constants identify provider parsers.
+const (
 	SourceCdnApiCep        = "cdnapicep"
 	SourceGitHubJeffotoni  = "githubjeffotoni"
 	SourceViaCep           = "viacep"
@@ -22,7 +31,10 @@ const (
 	SourceBrasilAPI        = "brasilapi"
 	SourceOpenCEP          = "opencep"
 	SourceAwesomeAPI       = "awesomeapi"
+)
 
+// Provider endpoint templates and static payloads.
+const (
 	URLCdnApiCep        = "https://cdn.apicep.com/file/apicep/%s.json"
 	URLGitHubJeffotoni  = "https://raw.githubusercontent.com/jeffotoni/api.cep/master/v1/cep/%s"
 	URLViaCep           = "https://viacep.com.br/ws/%s/json/"
@@ -59,12 +71,14 @@ var (
 	}
 )
 
+// GetEndpoints returns a copy of the configured provider endpoints.
 func GetEndpoints() []Endpoint {
 	endpointsMu.RLock()
 	defer endpointsMu.RUnlock()
 	return cloneEndpoints(Endpoints)
 }
 
+// SetEndpoints replaces provider endpoints using an internal copy.
 func SetEndpoints(next []Endpoint) {
 	endpointsMu.Lock()
 	Endpoints = cloneEndpoints(next)

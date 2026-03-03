@@ -12,6 +12,9 @@ type CacheProvider interface {
 	GetAny(key string) (any, bool)
 }
 
+// SetCacheProvider registers a cache backend for Search cache reads/writes.
+// Passing nil disables cache usage at the provider layer.
+// The setting is global for the current process.
 func SetCacheProvider(provider CacheProvider) {
 	gocache.SetProvider(provider)
 }

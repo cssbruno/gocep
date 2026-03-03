@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// ErrInvalidCEP is returned when a CEP cannot be normalized to 8 digits.
 var ErrInvalidCEP = errors.New("invalid cep")
 
 // CheckCEP validates whether the provided CEP has exactly 8 numeric digits.

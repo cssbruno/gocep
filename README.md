@@ -2,10 +2,10 @@
 [![CI](https://github.com/cssbruno/gocep/actions/workflows/ci.yml/badge.svg)](https://github.com/cssbruno/gocep/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gocep.svg)](https://pkg.go.dev/github.com/cssbruno/gocep) ![GitHub Release](https://img.shields.io/github/v/release/cssbruno/gocep?include_prereleases) [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gocep)](https://goreportcard.com/report/github.com/cssbruno/gocep) [![License](https://img.shields.io/github/license/cssbruno/gocep)](https://github.com/cssbruno/gocep/blob/master/LICENSE)
 
 Fast CEP lookup library for Go.
-It queries multiple providers in parallel, returns the first successful address, and supports cache backends for repeated lookups.
+It queries multiple providers in parallel, returns the first successful address, and supports optional user-provided caching for repeated lookups.
 
 ## What Is a CEP?
-`CEP` means `Codigo de Enderecamento Postal` in Brazil.
+`CEP` means `Código de Endereçamento Postal` in Brazil.
 It is the Brazilian postal code, similar to a ZIP code in the US.
 The library accepts both formats:
 - `00000-000` (example: `01001-000`)
@@ -79,25 +79,33 @@ The library is configured in code through [`pkg/cep/options.go`](pkg/cep/options
 
 Example:
 ```go
+package main
+
 import (
+	"fmt"
 	"time"
 
 	"github.com/cssbruno/gocep/pkg/cep"
 )
 
-opts := cep.GetOptions()
-opts.CacheEnabled = true
-opts.SearchTimeout = 10 * time.Second
-opts.CacheTTL = 24 * time.Hour
-cep.SetOptions(opts)
-
-// Optional: provide your own cache implementation.
 type myCacheProvider struct{}
 
 func (myCacheProvider) SetAnyTTL(key string, value any, ttl time.Duration) bool { return true }
 func (myCacheProvider) GetAny(key string) (any, bool) { return nil, false }
 
-cep.SetCacheProvider(myCacheProvider{})
+func main() {
+	opts := cep.GetOptions()
+	opts.CacheEnabled = true
+	opts.SearchTimeout = 10 * time.Second
+	opts.CacheTTL = 24 * time.Hour
+	cep.SetOptions(opts)
+
+	// Optional: provide your own cache implementation.
+	cep.SetCacheProvider(myCacheProvider{})
+
+	result, address, err := cep.Search("01001-000")
+	fmt.Println(result, address, err)
+}
 ```
 
 Main options:
@@ -106,10 +114,37 @@ Main options:
 - `cep.Options.SearchTimeout`
 - `cep.Options.MaxProviderBody`
 
+## API Reference
+- `cep.Search(cep string) (string, models.CEPAddress, error)`:
+  runs all configured providers in parallel and returns the first complete address.
+- `cep.ValidCEP(models.CEPAddress) bool`:
+  validates normalized address completeness (`cidade`, `uf`, `logradouro`, `bairro`).
+- `cep.GetOptions()` / `cep.SetOptions(...)`:
+  read/update runtime search behavior.
+- `cep.SetHTTPClient(client *http.Client)`:
+  override outbound HTTP behavior (timeout, proxy, transport).
+- `cep.SetCacheProvider(provider)`:
+  register a user cache backend.
+- `models.GetEndpoints()` / `models.SetEndpoints(...)`:
+  read/update provider list safely.
+- `util.CheckCEP`, `util.NormalizeCEP`, `util.FormatCEP`:
+  input validation and format helpers.
+
+Behavior notes:
+- Search accepts `00000000` and `00000-000`.
+- Only `https` provider URLs are accepted.
+- Cache is used only when `Options.CacheEnabled` is true and a provider is set with `cep.SetCacheProvider(...)`.
+- If no provider returns a complete address, `Search` returns `Options.DefaultJSON`.
+- `Search` currently returns `nil` error and uses the JSON/address return values for lookup outcome.
+
+Global configuration notes:
+- `cep.SetOptions`, `cep.SetHTTPClient`, `cep.SetCacheProvider`, and `models.SetEndpoints` update process-wide state.
+- Configure them during startup before handling concurrent calls to `cep.Search`.
+
 ## Examples
 Examples in [`examples/`](examples/):
-- `go/lib`
-- `go/client`
+- `go/lib`: basic lookup
+- `go/client`: advanced configuration (options + custom cache provider)
 
 ## Development
 ```bash

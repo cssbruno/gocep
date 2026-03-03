@@ -12,6 +12,7 @@ type CEPAddress struct {
 	Neighborhood string `json:"bairro"`
 }
 
+// CdnApiCep maps CDN API CEP provider fields.
 type CdnApiCep struct {
 	Status   int    `json:"status"`
 	Code     string `json:"code"`
@@ -21,6 +22,7 @@ type CdnApiCep struct {
 	Address  string `json:"address"`
 }
 
+// GithubJeffotoni maps githubjeffotoni provider fields.
 type GithubJeffotoni struct {
 	PostalCode   string `json:"cep"`
 	Street       string `json:"logradouro"`
@@ -73,6 +75,7 @@ type RepublicaVirtual struct {
 	Street       string `json:"logradouro"`
 }
 
+// Correio maps Correios SOAP response fields.
 type Correio struct {
 	XMLName xml.Name `xml:"Envelope"`
 	Text    string   `xml:",chardata"`
@@ -95,6 +98,7 @@ type Correio struct {
 	} `xml:"Body"`
 }
 
+// BrasilAPI provider response.
 type BrasilAPI struct {
 	PostalCode   string `json:"cep"`
 	State        string `json:"state"`

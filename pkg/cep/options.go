@@ -5,11 +5,17 @@ import (
 	"time"
 )
 
+// Options controls runtime behavior for CEP searches.
 type Options struct {
-	DefaultJSON     string
-	CacheEnabled    bool
-	CacheTTL        time.Duration
-	SearchTimeout   time.Duration
+	// DefaultJSON is returned when no provider yields a complete address.
+	DefaultJSON string
+	// CacheEnabled toggles read/write operations to the configured cache provider.
+	CacheEnabled bool
+	// CacheTTL is used when storing search results in cache.
+	CacheTTL time.Duration
+	// SearchTimeout limits total search time across all providers.
+	SearchTimeout time.Duration
+	// MaxProviderBody is the maximum response body size accepted per provider.
 	MaxProviderBody int64
 }
 
@@ -24,12 +30,16 @@ var (
 	}
 )
 
+// GetOptions returns a copy of the current CEP options.
 func GetOptions() Options {
 	optionsMu.RLock()
 	defer optionsMu.RUnlock()
 	return options
 }
 
+// SetOptions replaces CEP package options for the current process.
+// Empty or invalid fields are normalized to safe defaults.
+// Applications should configure options during startup.
 func SetOptions(next Options) {
 	optionsMu.Lock()
 	defer optionsMu.Unlock()

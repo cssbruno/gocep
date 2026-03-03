@@ -18,6 +18,9 @@ var (
 	httpClient   = newDefaultHTTPClient()
 )
 
+// SetHTTPClient overrides the HTTP client used for provider requests.
+// Passing nil restores the package default client.
+// The setting is global for the current process.
 func SetHTTPClient(client *http.Client) {
 	httpClientMu.Lock()
 	defer httpClientMu.Unlock()

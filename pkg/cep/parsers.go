@@ -22,6 +22,7 @@ var parserBySource = map[string]sourceParser{
 	models.SourceAwesomeAPI:       parseAwesomeAPI,
 }
 
+// ParseCEPAddress parses a provider response payload into the normalized address model.
 func ParseCEPAddress(source string, body []byte) (models.CEPAddress, error) {
 	parser, ok := parserBySource[source]
 	if !ok {
