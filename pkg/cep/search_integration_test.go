@@ -1,6 +1,7 @@
 package cep
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -8,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/gocep/models"
-	"github.com/cssbruno/gocep/service/gocache"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/service/gocache"
 )
 
 func TestSearchIgnoresInvalidStringCacheAndUsesProviderResult(t *testing.T) {
@@ -207,9 +208,13 @@ func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
 	const expectedBody = `{"cep":"02020-020","cidade":"São Paulo","uf":"SP","logradouro":"Rua Dedupe","bairro":"Centro"}`
 
 	var calls atomic.Int32
+	providerStarted := make(chan struct{})
+	releaseProvider := make(chan struct{})
 	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		time.Sleep(50 * time.Millisecond)
+		if calls.Add(1) == 1 {
+			close(providerStarted)
+		}
+		<-releaseProvider
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"cep":"02020-020","logradouro":"Rua Dedupe","bairro":"Centro","localidade":"São Paulo","uf":"SP"}`))
 	}))
@@ -228,10 +233,12 @@ func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(workers)
 
+	startWorkers := make(chan struct{})
 	errs := make(chan string, workers)
 	for range workers {
 		go func() {
 			defer wg.Done()
+			<-startWorkers
 			gotBody, gotAddress, err := Search(cepCode)
 			if err != nil {
 				errs <- err.Error()
@@ -247,6 +254,15 @@ func TestSearchConcurrentCallsAreDeduplicated(t *testing.T) {
 		}()
 	}
 
+	close(startWorkers)
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
+	defer waitCancel()
+	select {
+	case <-providerStarted:
+	case <-waitCtx.Done():
+		t.Fatalf("timed out waiting for provider request")
+	}
+	close(releaseProvider)
 	wg.Wait()
 	close(errs)
 

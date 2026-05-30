@@ -1,5 +1,9 @@
 # gocep
-[![CI](https://github.com/cssbruno/gocep/actions/workflows/ci.yml/badge.svg)](https://github.com/cssbruno/gocep/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gocep.svg)](https://pkg.go.dev/github.com/cssbruno/gocep) ![GitHub Release](https://img.shields.io/github/v/release/cssbruno/gocep?include_prereleases) [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gocep)](https://goreportcard.com/report/github.com/cssbruno/gocep) [![License](https://img.shields.io/github/license/cssbruno/gocep)](https://github.com/cssbruno/gocep/blob/master/LICENSE)
+[![CI](https://github.com/cssbruno/gocep/actions/workflows/ci.yml/badge.svg)](https://github.com/cssbruno/gocep/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/cssbruno/gocep/v2.svg)](https://pkg.go.dev/github.com/cssbruno/gocep/v2) ![GitHub Release](https://img.shields.io/github/v/release/cssbruno/gocep?include_prereleases) [![Go Report Card](https://goreportcard.com/badge/github.com/cssbruno/gocep/v2)](https://goreportcard.com/report/github.com/cssbruno/gocep/v2) [![License](https://img.shields.io/github/license/cssbruno/gocep)](https://github.com/cssbruno/gocep/blob/master/LICENSE)
+
+<p align="center">
+  <img src="gopher_ibge.png" alt="Gopher IBGE mascot" width="220">
+</p>
 
 Fast CEP lookup library for Go.
 It queries multiple providers in parallel, returns the first successful address, and supports optional user-provided caching for repeated lookups.
@@ -22,7 +26,7 @@ The library accepts both formats:
 
 ## Install
 ```bash
-go get github.com/cssbruno/gocep@latest
+go get github.com/cssbruno/gocep/v2@latest
 ```
 
 ## Basic Usage
@@ -34,7 +38,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cssbruno/gocep/pkg/cep"
+	"github.com/cssbruno/gocep/v2/pkg/cep"
 )
 
 func main() {
@@ -42,12 +46,17 @@ func main() {
 	switch {
 	case errors.Is(err, cep.ErrInvalidCEP):
 		fmt.Println("invalid cep")
+		return
 	case errors.Is(err, cep.ErrTimeout):
 		fmt.Println("lookup timed out")
+		return
 	case errors.Is(err, cep.ErrNotFound):
 		fmt.Println("cep not found")
+		return
+	case err != nil:
+		fmt.Println("error:", err)
+		return
 	}
-	fmt.Println("error:", err)
 	fmt.Println("json:", resultJSON)
 	fmt.Println("address:", normalized)
 }
@@ -60,7 +69,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/cssbruno/gocep/pkg/util"
+	"github.com/cssbruno/gocep/v2/pkg/util"
 )
 
 func main() {
@@ -85,6 +94,7 @@ Configured in [`models/endpoints.go`](models/endpoints.go):
 - AwesomeAPI CEP
 
 To override providers at runtime, prefer `models.SetEndpoints(...)`.
+Default providers are managed through `models.GetEndpoints()` and `models.SetEndpoints(...)`.
 
 ## Configuration
 The library is configured in code through [`pkg/cep/options.go`](pkg/cep/options.go).
@@ -97,7 +107,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cssbruno/gocep/pkg/cep"
+	"github.com/cssbruno/gocep/v2/pkg/cep"
 )
 
 type myCacheProvider struct{}
@@ -128,6 +138,7 @@ Main options:
 
 ## Advanced Client API
 Use `cep.NewClient(...)` when you need isolated configuration instead of global package state.
+New clients do not inherit the package global cache provider; pass `cep.WithCacheProvider(...)` when client-level caching is desired.
 
 ```go
 package main
@@ -138,7 +149,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cssbruno/gocep/pkg/cep"
+	"github.com/cssbruno/gocep/v2/pkg/cep"
 )
 
 type myCacheProvider struct{}
@@ -200,6 +211,7 @@ Behavior notes:
 - Search accepts `00000000` and `00000-000`.
 - Only `https` provider URLs are accepted.
 - Cache is used only when `Options.CacheEnabled` is true and a provider is set with `cep.SetCacheProvider(...)`.
+- Client cache is used only when `Options.CacheEnabled` is true and the client has a provider from `cep.WithCacheProvider(...)` or `client.SetCacheProvider(...)`.
 - If no provider returns a complete address, lookup returns `Options.DefaultJSON` and `cep.ErrNotFound`.
 - Invalid CEP returns `cep.ErrInvalidCEP`.
 - Timeout returns `cep.ErrTimeout`.
@@ -220,6 +232,8 @@ go test ./...
 go test -race ./...
 go vet ./...
 make test
+make install-quality-tools
+make ci
 ```
 
 ## Versioning And Releases
@@ -241,7 +255,7 @@ Release flow:
    ```bash
    git push origin v1.4.0
    ```
-5. Workflow [`release.yml`](.github/workflows/release.yml) runs tests/race/vet/staticcheck/golangci-lint/govulncheck, validates examples, and publishes a GitHub Release with generated notes.
+5. Workflow [`release.yml`](.github/workflows/release.yml) runs tests/race/vet/staticcheck/golangci-lint/govulncheck, validates example builds, and publishes a GitHub Release with generated notes.
 
 ## Credits
 Original project and base implementation by **Jeffotoni**:

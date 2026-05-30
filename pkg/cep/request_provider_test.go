@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
 
 // go test -run ^TestRequestProvider$ -v
@@ -146,7 +146,11 @@ func TestRequestProvider(t *testing.T) {
 			defer cancel()
 
 			chResult := make(chan Result, 1)
-			go requestProvider(ctx, cancel, tt.cep, tt.source, http.MethodGet, server.URL+"/%s", chResult)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				requestProvider(ctx, cancel, tt.cep, tt.source, http.MethodGet, server.URL+"/%s", chResult)
+			}()
 
 			if tt.wantResult {
 				select {
@@ -154,14 +158,28 @@ func TestRequestProvider(t *testing.T) {
 					if string(got.Body) != tt.want {
 						t.Errorf("requestProvider() = %v, want %v", string(got.Body), tt.want)
 					}
-				case <-time.After(time.Second):
-					t.Fatalf("requestProvider() timeout waiting for result")
+				case <-done:
+					select {
+					case got := <-chResult:
+						if string(got.Body) != tt.want {
+							t.Errorf("requestProvider() = %v, want %v", string(got.Body), tt.want)
+						}
+					default:
+						t.Fatalf("requestProvider() returned without result")
+					}
+				case <-ctx.Done():
+					t.Fatalf("requestProvider() context done waiting for result: %v", ctx.Err())
 				}
 			} else {
 				select {
+				case <-done:
+				case <-ctx.Done():
+					t.Fatalf("requestProvider() context done waiting for completion: %v", ctx.Err())
+				}
+				select {
 				case got := <-chResult:
 					t.Fatalf("requestProvider() unexpected result: %s", string(got.Body))
-				case <-time.After(200 * time.Millisecond):
+				default:
 				}
 			}
 
@@ -206,12 +224,21 @@ func TestRequestProvider_RequestBuildError(t *testing.T) {
 	defer cancel()
 	chResult := make(chan Result, 1)
 
-	go requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "\n", chResult)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		requestProvider(ctx, cancel, "01001000", models.SourceViaCep, http.MethodGet, "\n", chResult)
+	}()
 
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatalf("requestProvider() context done waiting for completion: %v", ctx.Err())
+	}
 	select {
 	case got := <-chResult:
 		t.Fatalf("unexpected result: %s", string(got.Body))
-	case <-time.After(200 * time.Millisecond):
+	default:
 	}
 }
 

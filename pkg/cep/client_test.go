@@ -6,11 +6,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/service/gocache"
 )
 
 func testClientOptions() Options {
@@ -25,9 +27,7 @@ func testClientOptions() Options {
 
 func TestClientSearchContextRespectsCallerDeadline(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(120 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"cep":"01001-000","logradouro":"Praça da Sé","bairro":"Sé","localidade":"São Paulo","uf":"SP"}`)
+		<-r.Context().Done()
 	}))
 	defer server.Close()
 
@@ -64,9 +64,7 @@ func TestClientProviderPolicyOrderedFallbackWithPerProviderTimeout(t *testing.T)
 		switch r.URL.Path {
 		case "/slow/" + cepCode:
 			slowCalls.Add(1)
-			time.Sleep(120 * time.Millisecond)
-			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, `{"cep":"01001-000","logradouro":"Rua Lenta","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`)
+			<-r.Context().Done()
 		case "/fast/" + cepCode:
 			fastCalls.Add(1)
 			w.WriteHeader(http.StatusOK)
@@ -94,9 +92,7 @@ func TestClientProviderPolicyOrderedFallbackWithPerProviderTimeout(t *testing.T)
 		}),
 	)
 
-	start := time.Now()
 	gotBody, gotAddress, err := client.Search(cepCode)
-	elapsed := time.Since(start)
 
 	if err != nil {
 		t.Fatalf("Search() error = %v, want nil", err)
@@ -109,9 +105,6 @@ func TestClientProviderPolicyOrderedFallbackWithPerProviderTimeout(t *testing.T)
 	}
 	if slowCalls.Load() != 1 || fastCalls.Load() != 1 {
 		t.Fatalf("calls slow=%d fast=%d, want 1/1", slowCalls.Load(), fastCalls.Load())
-	}
-	if elapsed > 110*time.Millisecond {
-		t.Fatalf("Search() elapsed = %s, expected provider-timeout fallback", elapsed)
 	}
 }
 
@@ -192,9 +185,7 @@ func TestClientProviderPolicyPreferredAndDisabled(t *testing.T) {
 
 func TestClientAllProviderTimeoutsReturnErrTimeout(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(150 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"cep":"01001-000","logradouro":"Rua Lenta","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`)
+		<-r.Context().Done()
 	}))
 	defer server.Close()
 
@@ -299,5 +290,165 @@ func TestClientConfigurationIsolation(t *testing.T) {
 	global := GetOptions()
 	if global.SearchTimeout != old.SearchTimeout || global.MaxProviderBody != old.MaxProviderBody {
 		t.Fatalf("global options changed unexpectedly: got %+v want %+v", global, old)
+	}
+}
+
+func TestClientSearchContextDoesNotShareCancelableContext(t *testing.T) {
+	const cepCode = "01001000"
+	const expectedBody = `{"cep":"01001-000","cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Rapida","bairro":"Centro"}`
+
+	firstStarted := make(chan struct{})
+	var calls atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			close(firstStarted)
+			<-r.Context().Done()
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"cep":"01001-000","logradouro":"Rua Rapida","bairro":"Centro","localidade":"Sao Paulo","uf":"SP"}`)
+	}))
+	defer server.Close()
+
+	client := NewClient(
+		WithHTTPClient(server.Client()),
+		WithOptions(testClientOptions()),
+		WithEndpoints([]models.Endpoint{
+			{Method: models.MethodGet, Source: models.SourceViaCep, URL: server.URL + "/%s"},
+		}),
+	)
+
+	firstCtx, firstCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer firstCancel()
+	firstErr := make(chan error, 1)
+	go func() {
+		_, _, err := client.SearchContext(firstCtx, cepCode)
+		firstErr <- err
+	}()
+
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
+	defer waitCancel()
+	select {
+	case <-firstStarted:
+	case <-waitCtx.Done():
+		t.Fatalf("timed out waiting for first request")
+	}
+
+	secondCtx, secondCancel := context.WithTimeout(context.Background(), time.Second)
+	defer secondCancel()
+	gotBody, gotAddress, err := client.SearchContext(secondCtx, cepCode)
+	if err != nil {
+		t.Fatalf("second SearchContext() error = %v, want nil", err)
+	}
+	if gotBody != expectedBody {
+		t.Fatalf("second SearchContext() body = %s, want %s", gotBody, expectedBody)
+	}
+	if !ValidCEP(gotAddress) {
+		t.Fatalf("second SearchContext() address = %+v, want valid", gotAddress)
+	}
+
+	if err := <-firstErr; !errors.Is(err, ErrTimeout) {
+		t.Fatalf("first SearchContext() error = %v, want %v", err, ErrTimeout)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("provider calls = %d, want 2", calls.Load())
+	}
+}
+
+func TestClientRejectsOversizedProviderBody(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint models.Endpoint
+	}{
+		{
+			name: "json",
+			endpoint: models.Endpoint{
+				Method: models.MethodGet,
+				Source: models.SourceViaCep,
+			},
+		},
+		{
+			name: "correio",
+			endpoint: models.Endpoint{
+				Method: models.MethodPost,
+				Source: models.SourceCorreio,
+				Body:   models.PayloadCorreio,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = io.WriteString(w, strings.Repeat("x", 32))
+			}))
+			defer server.Close()
+
+			opts := testClientOptions()
+			opts.CacheEnabled = true
+			opts.MaxProviderBody = 8
+			cache := &testCacheProvider{}
+			tt.endpoint.URL = server.URL + "/%s"
+			if tt.endpoint.Source == models.SourceCorreio {
+				tt.endpoint.URL = server.URL
+			}
+
+			client := NewClient(
+				WithHTTPClient(server.Client()),
+				WithOptions(opts),
+				WithCacheProvider(cache),
+				WithEndpoints([]models.Endpoint{tt.endpoint}),
+			)
+
+			gotBody, gotAddress, err := client.Search("01001000")
+			if !errors.Is(err, ErrNotFound) {
+				t.Fatalf("Search() error = %v, want %v", err, ErrNotFound)
+			}
+			if gotBody != opts.DefaultJSON {
+				t.Fatalf("Search() body = %s, want %s", gotBody, opts.DefaultJSON)
+			}
+			if gotAddress != (models.CEPAddress{}) {
+				t.Fatalf("Search() address = %+v, want empty", gotAddress)
+			}
+			if _, found := cache.GetAny("01001000"); found {
+				t.Fatalf("oversized response was cached")
+			}
+		})
+	}
+}
+
+func TestNewClientDoesNotInheritGlobalCacheProvider(t *testing.T) {
+	gocache.SetProvider(&testCacheProvider{})
+	t.Cleanup(func() {
+		gocache.SetProvider(nil)
+	})
+	_ = gocache.SetAnyTTL("01001000", cachedResult{
+		JSON: `{"cep":"01001-000","cidade":"Sao Paulo","uf":"SP","logradouro":"Rua Cache","bairro":"Centro"}`,
+		Address: models.CEPAddress{
+			CEP:          "01001-000",
+			City:         "Sao Paulo",
+			StateCode:    "SP",
+			Street:       "Rua Cache",
+			Neighborhood: "Centro",
+		},
+	}, time.Minute)
+
+	opts := testClientOptions()
+	opts.CacheEnabled = true
+	client := NewClient(
+		WithOptions(opts),
+		WithEndpoints(nil),
+	)
+
+	gotBody, gotAddress, err := client.Search("01001000")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrNotFound)
+	}
+	if gotBody != opts.DefaultJSON {
+		t.Fatalf("Search() body = %s, want %s", gotBody, opts.DefaultJSON)
+	}
+	if gotAddress != (models.CEPAddress{}) {
+		t.Fatalf("Search() address = %+v, want empty", gotAddress)
 	}
 }

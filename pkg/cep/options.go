@@ -2,6 +2,13 @@ package cep
 
 import "time"
 
+const (
+	defaultJSON            = `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`
+	defaultCacheTTL        = 48 * time.Hour
+	defaultSearchTimeout   = 15 * time.Second
+	defaultMaxProviderBody = 1 << 20
+)
+
 // Options controls runtime behavior for CEP searches.
 type Options struct {
 	// DefaultJSON is returned when no provider yields a complete address.
@@ -11,6 +18,7 @@ type Options struct {
 	// CacheTTL is used when storing search results in cache.
 	CacheTTL time.Duration
 	// SearchTimeout limits total search time across all providers.
+	// A zero or negative value uses the package default.
 	SearchTimeout time.Duration
 	// MaxProviderBody is the maximum response body size accepted per provider.
 	MaxProviderBody int64
@@ -18,11 +26,11 @@ type Options struct {
 
 func defaultOptions() Options {
 	return Options{
-		DefaultJSON:     `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`,
+		DefaultJSON:     defaultJSON,
 		CacheEnabled:    true,
-		CacheTTL:        48 * time.Hour,
-		SearchTimeout:   15 * time.Second,
-		MaxProviderBody: 1 << 20,
+		CacheTTL:        defaultCacheTTL,
+		SearchTimeout:   defaultSearchTimeout,
+		MaxProviderBody: defaultMaxProviderBody,
 	}
 }
 
@@ -41,16 +49,16 @@ func SetOptions(next Options) {
 func normalizeOptions(in Options) Options {
 	out := in
 	if out.DefaultJSON == "" {
-		out.DefaultJSON = `{"cep":"","cidade":"","uf":"","logradouro":"","bairro":""}`
+		out.DefaultJSON = defaultJSON
 	}
 	if out.CacheTTL <= 0 {
-		out.CacheTTL = 48 * time.Hour
+		out.CacheTTL = defaultCacheTTL
 	}
-	if out.SearchTimeout < 0 {
-		out.SearchTimeout = 15 * time.Second
+	if out.SearchTimeout <= 0 {
+		out.SearchTimeout = defaultSearchTimeout
 	}
 	if out.MaxProviderBody <= 0 {
-		out.MaxProviderBody = 1 << 20
+		out.MaxProviderBody = defaultMaxProviderBody
 	}
 	return out
 }

@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/gocep/models"
-	"github.com/cssbruno/gocep/service/gocache"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/pkg/util"
+	"github.com/cssbruno/gocep/v2/service/gocache"
 )
 
 // go test -run ^TestSearch$ -v
@@ -220,7 +221,7 @@ func TestSearchStringCacheRehydratesTypedCache(t *testing.T) {
 	}
 }
 
-func TestSearchTimeoutReturnsDefault(t *testing.T) {
+func TestSearchZeroTimeoutNormalizesToDefault(t *testing.T) {
 	useTestOptions(t, func(o *Options) {
 		o.SearchTimeout = 0
 	})
@@ -230,14 +231,24 @@ func TestSearchTimeoutReturnsDefault(t *testing.T) {
 	})
 
 	gotBody, gotAddress, err := Search("12345678")
-	if !errors.Is(err, ErrTimeout) {
-		t.Fatalf("Search() error = %v, want %v", err, ErrTimeout)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrNotFound)
 	}
 	if gotBody != GetOptions().DefaultJSON {
 		t.Fatalf("Search() body = %s, want %s", gotBody, GetOptions().DefaultJSON)
 	}
 	if gotAddress != (models.CEPAddress{}) {
 		t.Fatalf("Search() address = %+v, want empty", gotAddress)
+	}
+}
+
+func TestSearchInvalidCEPMatchesUtilSentinel(t *testing.T) {
+	_, _, err := Search("abc")
+	if !errors.Is(err, ErrInvalidCEP) {
+		t.Fatalf("Search() error = %v, want %v", err, ErrInvalidCEP)
+	}
+	if !errors.Is(err, util.ErrInvalidCEP) {
+		t.Fatalf("Search() error = %v, want util.ErrInvalidCEP", err)
 	}
 }
 

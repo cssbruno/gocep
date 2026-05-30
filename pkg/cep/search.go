@@ -3,7 +3,7 @@ package cep
 import (
 	"context"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
 
 // Result represents one provider response payload.

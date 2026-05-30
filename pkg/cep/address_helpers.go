@@ -1,8 +1,8 @@
 package cep
 
 import (
-	"github.com/cssbruno/gocep/models"
-	"github.com/cssbruno/gocep/pkg/util"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/pkg/util"
 )
 
 func formattedCEPOrRaw(cep string) string {

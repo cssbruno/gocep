@@ -56,9 +56,7 @@ const (
 var (
 	endpointsMu sync.RWMutex
 
-	// Endpoints contains provider configurations used by CEP search.
-	// Prefer SetEndpoints/GetEndpoints for concurrent-safe updates.
-	Endpoints = []Endpoint{
+	endpoints = []Endpoint{
 		{Method: MethodGet, Source: SourceCdnApiCep, URL: URLCdnApiCep},
 		{Method: MethodGet, Source: SourceGitHubJeffotoni, URL: URLGitHubJeffotoni},
 		{Method: MethodGet, Source: SourceViaCep, URL: URLViaCep},
@@ -75,13 +73,13 @@ var (
 func GetEndpoints() []Endpoint {
 	endpointsMu.RLock()
 	defer endpointsMu.RUnlock()
-	return cloneEndpoints(Endpoints)
+	return cloneEndpoints(endpoints)
 }
 
 // SetEndpoints replaces provider endpoints using an internal copy.
 func SetEndpoints(next []Endpoint) {
 	endpointsMu.Lock()
-	Endpoints = cloneEndpoints(next)
+	endpoints = cloneEndpoints(next)
 	endpointsMu.Unlock()
 }
 

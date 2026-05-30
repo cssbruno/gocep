@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
 
 type closeTracker struct {
@@ -150,6 +150,38 @@ func TestExecuteRequest_RedirectErrorReturnsFalse(t *testing.T) {
 		return errors.New("stop redirect")
 	}
 	SetHTTPClient(client)
+	t.Cleanup(func() {
+		SetHTTPClient(oldClient)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, redirectServer.URL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+
+	resp, ok := executeRequest(req)
+	if ok {
+		t.Fatalf("executeRequest() ok = true, want false")
+	}
+	if resp != nil {
+		t.Fatalf("executeRequest() response = %v, want nil", resp)
+	}
+}
+
+func TestExecuteRequest_RedirectDowngradeRejected(t *testing.T) {
+	insecureServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer insecureServer.Close()
+
+	redirectServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, insecureServer.URL, http.StatusFound)
+	}))
+	defer redirectServer.Close()
+
+	oldClient := getHTTPClient()
+	SetHTTPClient(redirectServer.Client())
 	t.Cleanup(func() {
 		SetHTTPClient(oldClient)
 	})

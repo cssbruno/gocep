@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/gocep/models"
-	"github.com/cssbruno/gocep/service/gocache"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/service/gocache"
 )
 
 func useServerHTTPClient(t *testing.T, server *httptest.Server) {

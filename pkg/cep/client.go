@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cssbruno/gocep/models"
-	"github.com/cssbruno/gocep/pkg/util"
-	"github.com/cssbruno/gocep/service/gocache"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/pkg/util"
+	"github.com/cssbruno/gocep/v2/service/gocache"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -107,7 +107,7 @@ func (globalCacheProvider) GetAny(key string) (any, bool) {
 	return gocache.GetAny(key)
 }
 
-var defaultClient = NewClient()
+var defaultClient = NewClient(WithCacheProvider(globalCacheProvider{}))
 
 // DefaultClient returns the package-level CEP client used by Search functions.
 func DefaultClient() *Client {
@@ -127,10 +127,9 @@ func SetHooks(hooks Hooks) {
 // NewClient creates an isolated CEP client.
 func NewClient(opts ...ClientOption) *Client {
 	c := &Client{
-		options:       defaultOptions(),
-		httpClient:    newDefaultHTTPClient(),
-		cacheProvider: globalCacheProvider{},
-		policy:        normalizeProviderPolicy(ProviderPolicy{}),
+		options:    defaultOptions(),
+		httpClient: newDefaultHTTPClient(),
+		policy:     normalizeProviderPolicy(ProviderPolicy{}),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -290,6 +289,11 @@ func (c *Client) SearchContext(ctx context.Context, cep string) (string, models.
 		return cfg.options.DefaultJSON, models.CEPAddress{}, ErrNotFound
 	}
 
+	if !canDeduplicateSearch(ctx) {
+		result := c.searchFromProviders(ctx, cfg, normalizedCEP, endpoints)
+		return result.JSON, result.Address, result.Err
+	}
+
 	value, _, _ := c.searchSingleflight.Do(normalizedCEP, func() (any, error) {
 		res := c.searchFromProviders(ctx, cfg, normalizedCEP, endpoints)
 		return res, nil
@@ -300,6 +304,13 @@ func (c *Client) SearchContext(ctx context.Context, cep string) (string, models.
 		return cfg.options.DefaultJSON, models.CEPAddress{}, ErrNotFound
 	}
 	return result.JSON, result.Address, result.Err
+}
+
+func canDeduplicateSearch(ctx context.Context) bool {
+	if _, ok := ctx.Deadline(); ok {
+		return false
+	}
+	return ctx.Done() == nil
 }
 
 func (c *Client) snapshot() snapshot {
@@ -363,9 +374,7 @@ func (c *Client) searchOrdered(ctx context.Context, cfg snapshot, cep string, en
 			}
 			continue
 		}
-		jsonCep := string(result.Body)
-		c.cacheSearchResult(cfg, cep, jsonCep, result.Address)
-		return searchResult{JSON: jsonCep, Address: result.Address, Err: nil}
+		return c.successfulSearchResult(cfg, cep, result)
 	}
 	if sawProviderTimeout {
 		return searchResult{JSON: cfg.options.DefaultJSON, Address: models.CEPAddress{}, Err: ErrTimeout}
@@ -403,7 +412,6 @@ func (c *Client) searchParallel(ctx context.Context, cancel context.CancelFunc, 
 
 			select {
 			case results <- result:
-				cancel()
 			case <-ctx.Done():
 			}
 		}()
@@ -423,13 +431,39 @@ func (c *Client) searchParallel(ctx context.Context, cancel context.CancelFunc, 
 				}
 				return failureResult(ctx, cfg.options.DefaultJSON)
 			}
-			jsonCep := string(result.Body)
-			c.cacheSearchResult(cfg, cep, jsonCep, result.Address)
-			return searchResult{JSON: jsonCep, Address: result.Address, Err: nil}
+			cancel()
+			return c.successfulSearchResult(cfg, cep, result)
+		default:
+		}
+
+		select {
+		case result, ok := <-results:
+			if !ok {
+				if sawProviderTimeout.Load() {
+					return searchResult{JSON: cfg.options.DefaultJSON, Address: models.CEPAddress{}, Err: ErrTimeout}
+				}
+				return failureResult(ctx, cfg.options.DefaultJSON)
+			}
+			cancel()
+			return c.successfulSearchResult(cfg, cep, result)
 		case <-ctx.Done():
+			select {
+			case result, ok := <-results:
+				if ok {
+					cancel()
+					return c.successfulSearchResult(cfg, cep, result)
+				}
+			default:
+			}
 			return failureResult(ctx, cfg.options.DefaultJSON)
 		}
 	}
+}
+
+func (c *Client) successfulSearchResult(cfg snapshot, cep string, result Result) searchResult {
+	jsonCep := string(result.Body)
+	c.cacheSearchResult(cfg, cep, jsonCep, result.Address)
+	return searchResult{JSON: jsonCep, Address: result.Address, Err: nil}
 }
 
 func failureResult(ctx context.Context, defaultJSON string) searchResult {

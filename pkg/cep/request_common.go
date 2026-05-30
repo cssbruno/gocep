@@ -2,13 +2,17 @@ package cep
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
+
+var marshalAddressJSON = json.Marshal
 
 func executeRequest(req *http.Request) (*http.Response, bool) {
 	response, err := executeRequestWithClient(getHTTPClient(), req)
@@ -36,7 +40,15 @@ func executeRequestWithClient(client *http.Client, req *http.Request) (*http.Res
 	if response == nil {
 		return nil, errors.New("nil response")
 	}
+	if response.Body == nil {
+		return nil, errors.New("nil response body")
+	}
+	if response.Request == nil || response.Request.URL == nil || !strings.EqualFold(response.Request.URL.Scheme, "https") {
+		_ = response.Body.Close()
+		return nil, errors.New("non-tls provider URL")
+	}
 	if response.StatusCode != http.StatusOK {
+		_, _ = io.CopyN(io.Discard, response.Body, 4<<10)
 		_ = response.Body.Close()
 		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
@@ -53,8 +65,12 @@ func sendAddressResult(ctx context.Context, cancel context.CancelFunc, chResult 
 		return
 	}
 
+	sendResult(ctx, cancel, chResult, Result{Body: body, Address: address})
+}
+
+func sendResult(ctx context.Context, cancel context.CancelFunc, chResult chan<- Result, result Result) {
 	select {
-	case chResult <- Result{Body: body, Address: address}:
+	case chResult <- result:
 		cancel()
 	case <-ctx.Done():
 	}

@@ -3,9 +3,10 @@ package cep
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 
-	"github.com/cssbruno/gocep/models"
-	"github.com/cssbruno/gocep/pkg/util"
+	"github.com/cssbruno/gocep/v2/models"
+	"github.com/cssbruno/gocep/v2/pkg/util"
 )
 
 var errUnknownParserSource = errors.New("unknown parser source")
@@ -69,7 +70,7 @@ func parseRepublicaVirtual(body []byte) (models.CEPAddress, error) {
 	if err := decodeProviderPayload(body, &payload); err != nil {
 		return models.CEPAddress{}, err
 	}
-	return buildAddress(payload.City, payload.StateCode, payload.Street, payload.Neighborhood), nil
+	return buildAddress(payload.City, payload.StateCode, joinStreetParts(payload.StreetType, payload.Street), payload.Neighborhood), nil
 }
 
 func parseBrasilAPI(body []byte) (models.CEPAddress, error) {
@@ -107,4 +108,14 @@ func buildAddress(city, stateCode, street, neighborhood string) models.CEPAddres
 		Street:       street,
 		Neighborhood: neighborhood,
 	})
+}
+
+func joinStreetParts(parts ...string) string {
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return strings.Join(out, " ")
 }

@@ -84,7 +84,11 @@ func TestRequestCorreio(t *testing.T) {
 			defer cancel()
 
 			chResult := make(chan Result, 1)
-			go requestCorreio(ctx, cancel, "01001000", http.MethodPost, endpoint, correioPayloadTemplate, chResult)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				requestCorreio(ctx, cancel, "01001000", http.MethodPost, endpoint, correioPayloadTemplate, chResult)
+			}()
 
 			if tt.wantResult {
 				select {
@@ -92,14 +96,28 @@ func TestRequestCorreio(t *testing.T) {
 					if string(got.Body) != tt.want {
 						t.Errorf("requestCorreio() = %v, want %v", string(got.Body), tt.want)
 					}
-				case <-time.After(time.Second):
-					t.Fatalf("requestCorreio() timeout waiting for result")
+				case <-done:
+					select {
+					case got := <-chResult:
+						if string(got.Body) != tt.want {
+							t.Errorf("requestCorreio() = %v, want %v", string(got.Body), tt.want)
+						}
+					default:
+						t.Fatalf("requestCorreio() returned without result")
+					}
+				case <-ctx.Done():
+					t.Fatalf("requestCorreio() context done waiting for result: %v", ctx.Err())
 				}
 			} else {
 				select {
+				case <-done:
+				case <-ctx.Done():
+					t.Fatalf("requestCorreio() context done waiting for completion: %v", ctx.Err())
+				}
+				select {
 				case got := <-chResult:
 					t.Fatalf("requestCorreio() unexpected result: %s", string(got.Body))
-				case <-time.After(200 * time.Millisecond):
+				default:
 				}
 			}
 
@@ -133,12 +151,21 @@ func TestRequestCorreio_Non200NoResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	chResult := make(chan Result, 1)
-	go requestCorreio(ctx, cancel, "01001000", http.MethodPost, server.URL, correioPayloadTemplate, chResult)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		requestCorreio(ctx, cancel, "01001000", http.MethodPost, server.URL, correioPayloadTemplate, chResult)
+	}()
 
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatalf("requestCorreio() context done waiting for completion: %v", ctx.Err())
+	}
 	select {
 	case got := <-chResult:
 		t.Fatalf("unexpected result: %s", string(got.Body))
-	case <-time.After(200 * time.Millisecond):
+	default:
 	}
 }
 

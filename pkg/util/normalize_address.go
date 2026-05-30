@@ -3,7 +3,7 @@ package util
 import (
 	"strings"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
 
 // NormalizeAddress trims textual fields and uppercases state code.

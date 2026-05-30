@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cssbruno/gocep/pkg/cep"
+	"github.com/cssbruno/gocep/v2/pkg/cep"
 )
 
 func main() {

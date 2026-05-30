@@ -3,7 +3,7 @@ package util
 import (
 	"testing"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
 
 func TestNormalizeAddress(t *testing.T) {

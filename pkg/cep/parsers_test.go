@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cssbruno/gocep/models"
+	"github.com/cssbruno/gocep/v2/models"
 )
 
 func TestParseCEPAddress(t *testing.T) {
@@ -78,11 +78,11 @@ func TestParseCEPAddress(t *testing.T) {
 		{
 			name:   "parse republica virtual",
 			source: models.SourceRepublicaVirtual,
-			body:   []byte(`{"uf":"SP","cidade":"São Paulo","bairro":"Sé","logradouro":"da Sé"}`),
+			body:   []byte(`{"uf":"SP","cidade":"São Paulo","bairro":"Sé","tipo_logradouro":"Praça","logradouro":"da Sé"}`),
 			want: models.CEPAddress{
 				City:         "São Paulo",
 				StateCode:    "SP",
-				Street:       "da Sé",
+				Street:       "Praça da Sé",
 				Neighborhood: "Sé",
 			},
 			wantErr: false,
