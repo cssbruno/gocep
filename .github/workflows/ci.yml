@@ -23,12 +23,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          check-latest: true
           cache: true
 
       - name: Download modules
@@ -56,7 +57,9 @@ jobs:
         run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m --disable-all --enable=govet --enable=staticcheck ./...
 
       - name: Run govulncheck
-        run: $(go env GOPATH)/bin/govulncheck ./...
+        run: |
+          go env GOVERSION GOTOOLCHAIN
+          $(go env GOPATH)/bin/govulncheck ./...
 
       - name: Validate examples
         run: |
