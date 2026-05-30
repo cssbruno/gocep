@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
           check-latest: true
@@ -33,6 +33,7 @@ jobs:
 
       - name: Update dependencies
         run: |
+          go get go@latest
           go get -u -t ./...
           go mod tidy
 
@@ -43,7 +44,7 @@ jobs:
           go vet ./...
 
       - name: Create dependency update PR
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@v8.1.1
         with:
           branch: chore/weekly-deps-update
           delete-branch: true
@@ -53,6 +54,7 @@ jobs:
             Automated weekly dependency update.
 
             Changes made:
+            - Ran `go get go@latest`
             - Ran `go get -u -t ./...`
             - Ran `go mod tidy`
             - Ran `go test ./...`
